@@ -42,17 +42,19 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    logging.debug(f"[DEBUG] author: {message.author}, content: {message.content}")
+    logging.debug(f"[on_message] 받은 메시지: {message.content} from {message.author}")
 
     if message.author == client.user:
+        logging.debug("[on_message] 봇 자신의 메시지라 무시")
         return
 
     if not is_target_user(message):
+        logging.debug("[on_message] 타겟 유저가 아님")
         return
 
     if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
         match = re.search(r"!cleanup(\d*)", message.content.strip())
-        limit = int(match.group(1)) if match and match.group(1).isdigit() else 2
+        limit = int(match.group(1)) if match and match.group(1).isdigit() else 10
         await message.channel.send(f"{limit}개의 메시지를 정리할게. 크크…")
         deleted = 0
         async for msg in message.channel.history(limit=limit + 20):
@@ -87,18 +89,25 @@ async def on_message(message):
             await message.channel.send("크크… 아직 기록할 대답이 없네.")
             return
 
+        logging.debug("[DIARY] 마지막 응답과 감정 분석 시작")
         emotion = await detect_emotion(last_user_input or last_kiyo_response)
         await upload_to_notion(last_kiyo_response, emotion=emotion)
         await message.channel.send("방금까지의 대화를 일기로 남겼어. 크크…")
         return
 
     if not message.content.strip():
+        logging.debug("[on_message] 빈 메시지라 무시")
         return
 
     conversation_log.append(("정서영", message.content))
 
     try:
+        logging.debug("[GPT] generate_kiyo_message 시작")
+        start = datetime.now()
         response = await generate_kiyo_message(conversation_log)
+        elapsed = (datetime.now() - start).total_seconds()
+        logging.debug(f"[GPT] 응답 완료, 소요 시간: {elapsed:.2f}초")
+
         conversation_log.append(("キヨ", response))
         await message.channel.send(response)
     except Exception as e:
