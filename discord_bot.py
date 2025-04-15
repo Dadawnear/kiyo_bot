@@ -10,7 +10,9 @@ from notion_utils import (
     generate_diary_entry,
     upload_to_notion,
     detect_emotion,
-    get_last_diary_timestamp
+    get_last_diary_timestamp,
+    generate_observation_log,
+    upload_observation_to_notion
 )
 
 load_dotenv()
@@ -67,7 +69,7 @@ async def on_message(message):
             return
 
         try:
-            match = re.search(r"!diary\s+(\w+)", message.content)
+            match = re.search(r"!diary\\s+(\\w+)", message.content)
             style = match.group(1) if match else "full_diary"
 
             last_diary_time = await get_last_diary_timestamp()
@@ -83,6 +85,16 @@ async def on_message(message):
         except Exception as e:
             logging.error(f"[ERROR] 일기 생성 중 오류: {repr(e)}")
             await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아. 조금 있다가 다시 시도해줘.")
+        return
+
+    if message.content.strip().startswith("!observe"):
+        try:
+            observation_text = await generate_observation_log(conversation_log)
+            await upload_observation_to_notion(observation_text)
+            await message.channel.send("크크… 오늘의 서영 관찰 기록도 정리해뒀어.")
+        except Exception as e:
+            logging.error(f"[ERROR] 관찰 기록 생성 오류: {repr(e)}")
+            await message.channel.send("크크… 관찰 일지를 지금은 쓸 수 없네.")
         return
 
     if not message.content.strip():
