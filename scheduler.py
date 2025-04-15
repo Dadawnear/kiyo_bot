@@ -2,14 +2,19 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 def setup_scheduler():
-    # 👇 import를 함수 안에서 늦게 실행
     from discord_bot import (
         send_morning_greeting,
         send_lunch_checkin,
         send_evening_checkin,
-        send_night_checkin,
-        send_daily_summary
+        send_night_checkin
     )
+    from kiyo_brain import generate_diary_and_image
+    from discord_bot import conversation_log
+
+    async def send_daily_summary():
+        if conversation_log:
+            await generate_diary_and_image(conversation_log)
+            conversation_log.clear()
 
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(send_morning_greeting, CronTrigger(hour=9, minute=0))       # 09:00
