@@ -4,7 +4,7 @@ import asyncio
 from dotenv import load_dotenv
 from kiyo_brain import (
     generate_kiyo_message,
-    generate_diary_and_image
+    generate_diary_and_image  # ✅ 이제 오류 방지를 위해 이 함수는 반드시 있어야 함
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
 from scheduler import setup_scheduler
@@ -71,3 +71,7 @@ async def send_daily_summary():
 
 async def start_discord_bot():
     await client.start(DISCORD_BOT_TOKEN)
+
+# ✅ 임시 더미 함수 정의 (실제 내용은 kiyo_brain.py에 작성되어야 함)
+async def generate_diary_and_image(conversation_log):
+    print("[DEBUG] generate_diary_and_image 함수 호출됨 — 현재 더미입니다.")
