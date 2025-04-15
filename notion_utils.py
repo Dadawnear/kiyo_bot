@@ -1,7 +1,7 @@
 import os
 import requests
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -25,10 +25,16 @@ EMOTION_TAGS = {
     "중립": ["관찰"]
 }
 
+def get_virtual_diary_date():
+    now = datetime.now()
+    if now.hour < 2:
+        return now - timedelta(days=1)
+    return now
+
 async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
-    today = datetime.now()
-    date_str = today.strftime("%Y년 %m월 %d일 일기")
-    iso_date = today.strftime("%Y-%m-%d")
+    diary_date = get_virtual_diary_date()
+    date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
+    iso_date = diary_date.strftime("%Y-%m-%d")
     tags = EMOTION_TAGS.get(emotion, ["기록"])
 
     url = "https://api.notion.com/v1/pages"
