@@ -7,7 +7,7 @@ from kiyo_brain import (
     generate_diary_entry,
     detect_emotion
 )
-from notion_utils import upload_to_notion, fetch_recent_notion_summary
+from notion_utils import upload_to_notion, fetch_recent_notion_summary, get_last_diary_timestamp
 import logging
 from datetime import datetime, timedelta
 import re
@@ -54,7 +54,8 @@ async def on_message(message):
 
     if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
         match = re.search(r"!cleanup(\d*)", message.content.strip())
-        limit = int(match.group(1)) if match and match.group(1).isdigit() else 1
+        limit = int(match.group(1)) if match and match.group(1).isdigit() else 2
+        await message.channel.send(f"{limit}개의 메시지를 정리할게. 크크…")
         deleted = 0
         async for msg in message.channel.history(limit=limit + 20):
             if msg.author == client.user:
@@ -71,7 +72,9 @@ async def on_message(message):
             return
 
         try:
-            diary_text = await generate_diary_entry(conversation_log)
+            last_diary_time = await get_last_diary_timestamp()
+            filtered_log = [entry for entry in conversation_log if entry[0] != "キヨ" or getattr(entry, 'timestamp', datetime.now()) > last_diary_time]
+            diary_text = await generate_diary_entry(filtered_log)
             emotion = await detect_emotion(diary_text)
             await upload_to_notion(diary_text, emotion)
             await message.channel.send("방금까지의 대화를 일기로 남겼어. 크크…")
