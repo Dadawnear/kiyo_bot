@@ -58,10 +58,6 @@ async def on_message(message):
         print("[DEBUG] generate_kiyo_message 호출 전")
         response = await generate_kiyo_message(conversation_log)
         print(f"[DEBUG] 생성된 응답: {response}")
-        if not response:
-            print("[ERROR] 응답이 비어 있음")
-            await message.channel.send("크크… 응답이 조금 늦네. 다시 한 번 말해줄래?")
-            return
         conversation_log.append(("キヨ", response))
         await message.channel.send(response)
     except Exception as e:
@@ -70,12 +66,8 @@ async def on_message(message):
 
 async def send_daily_summary():
     if conversation_log:
-        try:
-            await generate_diary_and_image(conversation_log)
-        except Exception as e:
-            print(f"[ERROR] 일기 생성 중 오류: {repr(e)}")
+        await generate_diary_and_image(conversation_log)
         conversation_log.clear()
 
 async def start_discord_bot():
-    print("[DEBUG] 디스코드 봇 시작 중...")
     await client.start(DISCORD_BOT_TOKEN)
