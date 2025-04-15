@@ -57,6 +57,8 @@ async def on_message(message):
     try:
         print("[DEBUG] generate_kiyo_message 호출 전")
         response = await generate_kiyo_message(conversation_log)
+        if not response:
+            raise ValueError("응답이 비어 있음")
         print(f"[DEBUG] 생성된 응답: {response}")
         conversation_log.append(("キヨ", response))
         await message.channel.send(response)
