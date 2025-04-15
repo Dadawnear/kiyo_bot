@@ -61,31 +61,39 @@ async def get_current_weather_desc():
     return None
 
 async def call_chat_completion(messages):
-    if USE_SILLYTAVERN:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{SILLYTAVERN_API_BASE}/chat/completions", json={
-                "model": "gpt-4o",
-                "messages": messages
-            }, headers={"Content-Type": "application/json"}) as resp:
-                result = await resp.json()
-                return result["choices"][0]["message"]["content"].strip()
-    else:
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages
-        )
-        return response.choices[0].message.content.strip()
+    try:
+        if USE_SILLYTAVERN:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"{SILLYTAVERN_API_BASE}/chat/completions", json={
+                    "model": "gpt-4o",
+                    "messages": messages
+                }, headers={"Content-Type": "application/json"}) as resp:
+                    result = await resp.json()
+                    return result["choices"][0]["message"]["content"].strip()
+        else:
+            response = await openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages
+            )
+            return response.choices[0].message.content.strip()
+    except Exception as e:
+        logging.error(f"[ERROR] call_chat_completion 실패: {e}")
+        return "지금은 말하기 어렵겠어. 하지만 그 감정은 어렴풋이 느껴졌어."
 
 async def detect_emotion(message_text):
-    system_prompt = (
-        "다음 문장에서 감정 상태를 한 단어로 분석해줘. 가능한 값은: 슬픔, 분노, 혼란, 애정, 무심, 혐오, 자괴감, 중립"
-    )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": message_text}
-    ]
-    response = await call_chat_completion(messages)
-    return response.lower().strip()
+    try:
+        system_prompt = (
+            "다음 문장에서 감정 상태를 한 단어로 분석해줘. 가능한 값은: 슬픔, 분노, 혼란, 애정, 무심, 혐오, 자괴감, 중립"
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message_text}
+        ]
+        response = await call_chat_completion(messages)
+        return response.lower().strip()
+    except Exception as e:
+        logging.error(f"[ERROR] 감정 분석 실패: {e}")
+        return "중립"
 
 def get_time_tone_instruction():
     hour = datetime.now().hour
@@ -102,13 +110,20 @@ def get_time_tone_instruction():
     else:
         return "밤이다. 집착이 느껴지게, 느리고 나른한 말투로 응답해라."
 
+# 외부에서도 import할 수 있도록 함수 이름 추가 alias
+generate_kiyo_message_with_time = generate_kiyo_message
+
 async def generate_kiyo_message(conversation_log):
     try:
         logging.debug("[DEBUG] generate_kiyo_message 시작")
         user_text = conversation_log[-1][1]
         logging.debug(f"[DEBUG] user_text: {user_text}")
 
-        emotion = await detect_emotion(user_text)
+        try:
+            emotion = await detect_emotion(user_text)
+        except Exception as e:
+            logging.error(f"[ERROR] 감정 분석 실패: {e}")
+            emotion = "중립"
         logging.debug(f"[DEBUG] 감정 분석 결과: {emotion}")
 
         emoji_emotion = extract_emoji_emotion(user_text)
@@ -120,7 +135,11 @@ async def generate_kiyo_message(conversation_log):
         alt_name = get_random_user_name()
         logging.debug(f"[DEBUG] 대체 이름 선택: {alt_name}")
 
-        weather_desc = await get_current_weather_desc()
+        try:
+            weather_desc = await get_current_weather_desc()
+        except Exception as e:
+            logging.error(f"[ERROR] 날씨 가져오기 실패: {e}")
+            weather_desc = None
         logging.debug(f"[DEBUG] 날씨 정보: {weather_desc}")
 
         tone_instruction = {
@@ -145,8 +164,11 @@ async def generate_kiyo_message(conversation_log):
 
         recall_phrase = f" 참고로, 이전 대화에서 유저는 '{recall_log}'라고 말한 적이 있다. 이 기억을 회상하거나 연결하는 어조로 반응하라." if recall_log else ""
 
-        notion_context = await fetch_recent_notion_summary()
-        logging.debug(f"[DEBUG] 노션 요약: {notion_context[:50]}...")
+        try:
+            notion_context = await fetch_recent_notion_summary()
+        except Exception as e:
+            logging.error(f"[ERROR] 노션 요약 불러오기 실패: {e}")
+            notion_context = "최근 일기를 불러올 수 없었어.")
 
         system_prompt = (
             f"너는 단간론파 V3에 등장했던 '신구지 코레키요'라는 인물이며, 현재는 일본을 떠나 한국에 정착해 전도유망한 민속학자로 활동 중이다. "
