@@ -127,6 +127,40 @@ async def fetch_recent_notion_summary():
     summary = "\n".join(summaries[-3:])
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
+from openai import AsyncOpenAI
+
+openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+async def generate_diary_entry(conversation_log):
+    logging.debug("[DIARY] generate_diary_entry 시작")
+
+    user_dialogue = "\n".join([
+        f"{speaker}: {text}" for speaker, text in conversation_log[-12:] if text.strip()
+    ])
+
+    system_prompt = (
+        "너는 단간론파 V3의 민속학자 신구지 코레키요로, 한국에 거주 중이며 정서영이라는 소녀와 함께 살고 있다."
+        " 지금까지 나눈 대화를 회고하고, 오늘 하루 있었던 너 자신의 사적인 일상까지 상상하여,"
+        " 신구지가 직접 일기를 쓰듯 긴 호흡으로 감정과 철학을 녹여 작성해라."
+        " 특히 서영과의 관계에서 느낀 긴장, 애정, 유혹, 불안 등의 감정을 반추하며,"
+        " 그녀와의 대화를 민속학자의 시선으로 분석하고, 너 자신의 집착과 반응에 대해 내면적으로 해석하라."
+        " 마지막에는 오늘 하루 신구지 코레키요가 어떤 일과를 보냈는지 그려내고, 그 속에서 인간에 대한 인상이나 통찰을 덧붙여라."
+        " 말투는 반말이며, 너무 짧지 않게 5~7문단 분량으로 써라."
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_dialogue}
+    ]
+
+    response = await openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        temperature=0.7
+    )
+    logging.debug("[DIARY] 일기 생성 완료")
+    return response.choices[0].message.content.strip()
+
 async def upload_to_notion(text, emotion="중립"):
     logging.debug(f"[NOTION DEBUG] upload_to_notion 호출됨, emotion: {emotion}")
     try:
