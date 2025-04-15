@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 import logging
 import re
+import requests
 from openai import AsyncOpenAI
 
 load_dotenv()
@@ -51,7 +52,6 @@ def get_virtual_diary_date():
     return datetime.now()
 
 async def detect_emotion(text):
-    # 단순 키워드 감지 기반 감정 분류 예시 (추후 GPT 분석으로 대체 가능)
     if any(kw in text for kw in ["외롭", "쓸쓸", "우울"]):
         return "불안"
     elif any(kw in text for kw in ["사랑", "보고싶", "서영"]):
@@ -90,6 +90,27 @@ async def generate_diary_entry(conversation_log, style="full_diary"):
     )
     return response.choices[0].message.content.strip()
 
+async def generate_diary_image_prompt(diary_text):
+    try:
+        logging.debug("[IMAGE PROMPT] 일기 내용 기반 이미지 프롬프트 생성 중")
+        system_prompt = (
+            "다음 일기 내용을 바탕으로, 마치 신구지가 카메라로 촬영해 일기에 붙여놓은 듯한, "
+            "cinematic하고 민속학적이며 분위기 있는 장면 하나를 묘사해줘. 100자 이내 영어 프롬프트로, 구체적이고 시각적인 묘사를 포함해."
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": diary_text}
+        ]
+        result = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            temperature=0.7
+        )
+        return result.choices[0].message.content.strip()
+    except Exception as e:
+        logging.error(f"[IMAGE PROMPT ERROR] 프롬프트 생성 실패: {e}")
+        return "a cinematic Japanese diary with folklore atmosphere"
+
 async def upload_to_notion(text, emotion_key="기록"):
     diary_date = get_virtual_diary_date()
     date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
@@ -105,24 +126,51 @@ async def upload_to_notion(text, emotion_key="기록"):
         }
     }
 
+    try:
+        image_prompt = await generate_diary_image_prompt(text)
+        image_response = await openai_client.images.generate(
+            model="dall-e-3",
+            prompt=image_prompt,
+            size="1024x1024",
+            quality="standard",
+            n=1
+        )
+        image_url = image_response.data[0].url
+        logging.debug(f"[NOTION IMAGE] 생성된 프롬프트: {image_prompt}")
+        logging.debug(f"[NOTION IMAGE] 이미지 URL 생성됨: {image_url}")
+    except Exception as e:
+        logging.warning(f"[NOTION IMAGE] 이미지 생성 실패: {e}")
+        image_url = None
+
+    children = [meta_block]
+    if image_url:
+        children.append({
+            "object": "block",
+            "type": "image",
+            "image": {
+                "type": "external",
+                "external": {"url": image_url},
+                "caption": [{"type": "text", "text": {"content": image_prompt}}]
+            }
+        })
+
+    children.append({
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+            "rich_text": [{"type": "text", "text": {"content": text}}]
+        }
+    })
+
     url = "https://api.notion.com/v1/pages"
     data = {
-        "parent": { "database_id": NOTION_DATABASE_ID },
+        "parent": {"database_id": NOTION_DATABASE_ID},
         "properties": {
-            "Name": { "title": [{"text": {"content": date_str}}] },
-            "날짜": { "date": { "start": iso_date }},
-            "태그": { "multi_select": [{"name": tag} for tag in tags] }
+            "Name": {"title": [{"text": {"content": date_str}}]},
+            "날짜": {"date": {"start": iso_date}},
+            "태그": {"multi_select": [{"name": tag} for tag in tags]}
         },
-        "children": [
-            meta_block,
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
-            }
-        ]
+        "children": children
     }
 
     response = requests.post(url, headers=HEADERS, json=data)
@@ -131,62 +179,3 @@ async def upload_to_notion(text, emotion_key="기록"):
         logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
     else:
         logging.info(f"[NOTION] 업로드 성공: {result.get('id')}")
-
-async def get_last_diary_timestamp():
-    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-    data = {
-        "page_size": 1,
-        "sorts": [{"property": "날짜", "direction": "descending"}]
-    }
-    response = requests.post(url, headers=HEADERS, json=data)
-    if response.status_code != 200:
-        return datetime.now() - timedelta(days=1)
-
-    try:
-        result = response.json()["results"][0]
-        return datetime.fromisoformat(result["properties"]["날짜"]["date"]["start"])
-    except Exception:
-        return datetime.now() - timedelta(days=1)
-
-@client.event
-async def on_ready():
-    print(f"[READY] Logged in as {client.user}")
-    try:
-        from scheduler import setup_scheduler
-        setup_scheduler(client, conversation_log)
-    except Exception as e:
-        logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
-
-@client.event
-async def on_message(message):
-    if message.author == client.user or not is_target_user(message): return
-    if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
-        conversation_log.clear()
-        return
-
-    if message.content.strip().startswith("!diary"):
-        try:
-            style_match = re.search(r"!diary (\w+)", message.content)
-            style = style_match.group(1) if style_match else "full_diary"
-            diary_text = await generate_diary_entry(conversation_log, style=style)
-            emotion = await detect_emotion(diary_text)
-            await upload_to_notion(diary_text, emotion)
-            await message.channel.send("크크… 오늘의 일기는 이렇게 남겨둘게.")
-        except Exception as e:
-            logging.error(f"[ERROR] 일기 작성 실패: {repr(e)}")
-            await message.channel.send("크크… 오늘은 일기를 남기기 어려운 밤이네.")
-        return
-
-    conversation_log.append(("정서영", message.content))
-
-    try:
-        from kiyo_brain import generate_kiyo_message
-        response = await generate_kiyo_message(conversation_log)
-        conversation_log.append(("キヨ", response))
-        await message.channel.send(response)
-    except Exception as e:
-        logging.error(f"[ERROR] 응답 생성 실패: {repr(e)}")
-        await message.channel.send("크크… 내가 지금은 응답을 만들 수 없어. 하지만 함수엔 잘 들어왔어.")
-
-async def start_discord_bot():
-    await client.start(DISCORD_BOT_TOKEN)
