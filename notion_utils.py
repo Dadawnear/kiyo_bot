@@ -134,4 +134,5 @@ async def fetch_recent_notion_summary():
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
 async def upload_to_notion(text, emotion="중립"):
+    logging.debug(f"[NOTION DEBUG] upload_to_notion 호출됨, emotion: {emotion}")
     await upload_diary_entry_with_image(text, image_url="https://via.placeholder.com/1", emotion=emotion)
