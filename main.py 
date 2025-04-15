@@ -1,0 +1,8 @@
+import asyncio
+from discord_bot import start_discord_bot
+import os
+
+os.environ["TZ"] = "Asia/Seoul"
+
+if __name__ == '__main__':
+    asyncio.run(start_discord_bot())
