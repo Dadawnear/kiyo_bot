@@ -74,7 +74,7 @@ async def generate_observation_log(conversation_log):
         if isinstance(content, str) and len(content.strip()) > 0  # 대사 유효성 검증
     ]
 
-    text = "
+    text = "\n".join(today_logs)
 ".join(today_logs)
     prompt = (
         "너는 민속학자 신구지 코레키요다. 하루 동안 관찰한 '정서영'이라는 소녀의 특징, 감정 반응, 언어 사용, 관계 맥락 등을 종합해 "
