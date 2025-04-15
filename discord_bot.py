@@ -31,6 +31,23 @@ async def on_message(message):
     if message.author == client.user or not is_target_user(message):
         return
 
+    # ✅ DM에서 !cleanup 명령 처리
+    if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
+        parts = message.content.strip().split()
+        limit = 10  # 기본 삭제 개수
+        if len(parts) == 2 and parts[1].isdigit():
+            limit = int(parts[1])
+        await message.channel.send(f"{limit}개의 메시지를 정리할게. 크크…")
+        deleted = 0
+        async for msg in message.channel.history(limit=limit + 20):  # 여유 있게 탐색
+            if msg.author == client.user:
+                await msg.delete()
+                deleted += 1
+                if deleted >= limit:
+                    break
+        return
+
+    # ✅ 일반 메시지 처리
     conversation_log.append(("정서영", message.content))
     response = await generate_kiyo_message(conversation_log)
     conversation_log.append(("キヨ", response))
