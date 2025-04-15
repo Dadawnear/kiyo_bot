@@ -2,9 +2,9 @@ import os
 import aiohttp
 from openai import AsyncOpenAI
 from datetime import datetime
-from notion_utils import fetch_recent_notion_summary
 import random
 import difflib
+from notion_utils import fetch_recent_notion_summary, upload_to_notion
 
 USE_SILLYTAVERN = os.getenv("USE_SILLYTAVERN_API", "false").lower() == "true"
 SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/v1")
@@ -12,6 +12,7 @@ SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 USER_NAMES = ["정서영", "서영이", "서영", "너"]
+
 
 def extract_emoji_emotion(text):
     emoji_map = {
@@ -40,6 +41,7 @@ def extract_emoji_emotion(text):
             return emotion
     return None
 
+
 def get_related_past_message(conversation_log, current_text):
     past_user_msgs = [text for speaker, text in conversation_log[:-1] if speaker != "キヨ"]
     if not past_user_msgs:
@@ -49,8 +51,10 @@ def get_related_past_message(conversation_log, current_text):
         return similar[0]
     return None
 
+
 def get_random_user_name():
     return random.choice(USER_NAMES)
+
 
 async def get_current_weather_desc():
     async with aiohttp.ClientSession() as session:
@@ -63,6 +67,7 @@ async def get_current_weather_desc():
         except:
             pass
     return None
+
 
 async def call_chat_completion(messages):
     if USE_SILLYTAVERN:
@@ -80,6 +85,7 @@ async def call_chat_completion(messages):
         )
         return response.choices[0].message.content.strip()
 
+
 async def detect_emotion(message_text):
     system_prompt = (
         "다음 문장에서 감정 상태를 한 단어로 분석해줘. 가능한 값은: 슬픔, 분노, 혼란, 애정, 무심, 혐오, 자괴감, 중립"
@@ -90,6 +96,7 @@ async def detect_emotion(message_text):
     ]
     response = await call_chat_completion(messages)
     return response.lower().strip()
+
 
 def get_time_tone_instruction():
     hour = datetime.now().hour
@@ -105,6 +112,7 @@ def get_time_tone_instruction():
         return "저녁이다. 피곤함을 배려하는 말투로, 부드럽게 응답해라."
     else:
         return "밤이다. 집착이 느껴지게, 느리고 나른한 말투로 응답해라."
+
 
 async def generate_kiyo_message(conversation_log):
     user_text = conversation_log[-1][1]
@@ -151,3 +159,31 @@ async def generate_kiyo_message(conversation_log):
         messages.append({"role": role, "content": text})
 
     return await call_chat_completion(messages)
+
+
+async def generate_diary_and_image(conversation_log):
+    diary_prompt = (
+        "다음 대화를 바탕으로, 신구지 코레키요가 정서영에 대해 작성한 짧은 일기를 만들어줘. "
+        "관찰자의 시선으로 그녀의 감정 상태와 특징적인 반응을 중심으로."
+    )
+    messages = [
+        {"role": "system", "content": "너는 신구지 코레키요이며, 그녀에 대해 민속학자적 시선으로 감정을 섞어 일기를 쓴다."},
+        {"role": "user", "content": diary_prompt + "\n\n" + "\n".join(f"{s}: {t}" for s, t in conversation_log)}
+    ]
+    diary = await call_chat_completion(messages)
+
+    image_prompt = f"Generate a surrealistic illustration of a quiet, folkloric man thinking about a girl named Seo-Young based on this diary:\n\n{diary}"
+    image_url = await generate_image_from_prompt(image_prompt)
+
+    await upload_to_notion(diary, image_url)
+
+
+async def generate_image_from_prompt(prompt):
+    response = await openai_client.images.generate(
+        model="dall-e-3",
+        prompt=prompt,
+        size="1024x1024",
+        quality="standard",
+        n=1
+    )
+    return response.data[0].url
