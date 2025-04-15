@@ -54,8 +54,7 @@ async def on_message(message):
 
     if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
         match = re.search(r"!cleanup(\d*)", message.content.strip())
-        limit = int(match.group(1)) if match and match.group(1).isdigit() else 2
-        await message.channel.send(f"{limit}개의 메시지를 정리할게. 크크…")
+        limit = int(match.group(1)) if match and match.group(1).isdigit() else 1
         deleted = 0
         async for msg in message.channel.history(limit=limit + 20):
             if msg.author == client.user:
