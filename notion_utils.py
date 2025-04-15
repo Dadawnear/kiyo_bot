@@ -95,7 +95,7 @@ async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
         logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
     else:
         logging.info(f"[NOTION] 일기 생성 성공: {result.get('id', '응답에 ID 없음')}")
-        logging.info("[NOTION] 일기 생성 성공")
+        logging.info("[NOTION] upload_diary_entry_with_image 끝까지 도달")
 
 async def fetch_recent_notion_summary():
     url = "https://api.notion.com/v1/databases/{}/query".format(NOTION_DATABASE_ID)
@@ -135,4 +135,8 @@ async def fetch_recent_notion_summary():
 
 async def upload_to_notion(text, emotion="중립"):
     logging.debug(f"[NOTION DEBUG] upload_to_notion 호출됨, emotion: {emotion}")
-    await upload_diary_entry_with_image(text, image_url="https://via.placeholder.com/1", emotion=emotion)
+    try:
+        await upload_diary_entry_with_image(text, image_url="https://via.placeholder.com/1", emotion=emotion)
+        logging.debug("[NOTION DEBUG] upload_diary_entry_with_image 호출 완료")
+    except Exception as e:
+        logging.error(f"[NOTION ERROR] upload_to_notion 내부 오류: {e}")
