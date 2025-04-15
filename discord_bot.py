@@ -4,8 +4,6 @@ import asyncio
 from dotenv import load_dotenv
 from kiyo_brain import (
     generate_kiyo_message,
-    generate_morning_greeting, generate_lunch_checkin,
-    generate_evening_checkin, generate_night_checkin,
     generate_diary_and_image
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
@@ -53,32 +51,6 @@ async def on_message(message):
     response = await generate_kiyo_message(conversation_log)
     conversation_log.append(("キヨ", response))
     await message.channel.send(response)
-
-async def send_greeting_with_prompt(prompt_func):
-    for guild in client.guilds:
-        for member in guild.members:
-            if str(member) == USER_DISCORD_NAME:
-                try:
-                    channel = await member.create_dm()
-                    notion_summary = await fetch_recent_notion_summary()
-                    message = await prompt_func(notion_summary)
-                    await channel.send(message)
-                    conversation_log.append(("キヨ", message))
-                except Exception as e:
-                    print("Failed to send message:", e)
-
-# 각각 시간대별 메시지 함수
-async def send_morning_greeting():
-    await send_greeting_with_prompt(generate_morning_greeting)
-
-async def send_lunch_checkin():
-    await send_greeting_with_prompt(generate_lunch_checkin)
-
-async def send_evening_checkin():
-    await send_greeting_with_prompt(generate_evening_checkin)
-
-async def send_night_checkin():
-    await send_greeting_with_prompt(generate_night_checkin)
 
 async def send_daily_summary():
     if conversation_log:
