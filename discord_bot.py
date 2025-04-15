@@ -1,32 +1,33 @@
 import os
 import discord
 import asyncio
-from dotenv import load_dotenv
-from kiyo_brain import (
-    generate_kiyo_message,
-    detect_emotion
-)
-from notion_utils import upload_to_notion, fetch_recent_notion_summary, get_last_diary_timestamp, generate_diary_entry
-import logging
-from datetime import datetime, timedelta, timezone
 import re
+from datetime import datetime, timezone
+import logging
+from dotenv import load_dotenv
+from kiyo_brain import generate_kiyo_message
+from notion_utils import (
+    generate_diary_entry,
+    upload_to_notion,
+    detect_emotion,
+    get_last_diary_timestamp
+)
 
 load_dotenv()
+logging.basicConfig(level=logging.DEBUG)
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 USER_DISCORD_NAME = os.getenv("USER_DISCORD_NAME")
 
 intents = discord.Intents.default()
 intents.messages = True
-intents.message_content = True  # ✅ 메시지 내용 접근을 위해 꼭 필요함
+intents.message_content = True
 intents.guilds = True
 intents.members = True
 intents.dm_messages = True
 
 client = discord.Client(intents=intents)
 conversation_log = []
-
-logging.basicConfig(level=logging.DEBUG)
 
 def is_target_user(message):
     return str(message.author) == USER_DISCORD_NAME
@@ -44,16 +45,11 @@ async def on_ready():
 async def on_message(message):
     logging.debug(f"[on_message] 받은 메시지: {message.content} from {message.author}")
 
-    if message.author == client.user:
-        logging.debug("[on_message] 봇 자신의 메시지라 무시")
-        return
-
-    if not is_target_user(message):
-        logging.debug("[on_message] 타겟 유저가 아님")
+    if message.author == client.user or not is_target_user(message):
         return
 
     if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
-        match = re.search(r"!cleanup(\\d*)", message.content.strip())
+        match = re.search(r"!cleanup(\d*)", message.content.strip())
         limit = int(match.group(1)) if match and match.group(1).isdigit() else 1
         deleted = 0
         async for msg in message.channel.history(limit=limit + 20):
@@ -71,27 +67,25 @@ async def on_message(message):
             return
 
         try:
+            match = re.search(r"!diary\s+(\w+)", message.content)
+            style = match.group(1) if match else "full_diary"
+
             last_diary_time = await get_last_diary_timestamp()
             if last_diary_time.tzinfo is None:
                 last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
 
-            filtered_log = []
-            now = datetime.now(timezone.utc)
-            for speaker, text in conversation_log:
-                # 여기에 메시지의 시간 정보를 부여하려면 외부에서 저장해야 함 (여기선 생략)
-                filtered_log.append((speaker, text))
+            filtered_log = [(speaker, text) for speaker, text in conversation_log]
 
-            diary_text = await generate_diary_entry(filtered_log)
+            diary_text = await generate_diary_entry(filtered_log, style=style)
             emotion = await detect_emotion(diary_text)
             await upload_to_notion(diary_text, emotion)
-            await message.channel.send("방금까지의 대화를 일기로 남겼어. 크크…")
+            await message.channel.send(f"스타일: `{style}` | 감정: `{emotion}` — 일기를 남겼어. 크크…")
         except Exception as e:
             logging.error(f"[ERROR] 일기 생성 중 오류: {repr(e)}")
             await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아. 조금 있다가 다시 시도해줘.")
         return
 
     if not message.content.strip():
-        logging.debug("[on_message] 빈 메시지라 무시")
         return
 
     conversation_log.append(("정서영", message.content))
