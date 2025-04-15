@@ -7,6 +7,7 @@ from kiyo_brain import (
     generate_diary_and_image
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
+from scheduler import setup_scheduler
 
 load_dotenv()
 
@@ -22,12 +23,7 @@ def is_target_user(message):
 @client.event
 async def on_ready():
     print(f"[READY] Logged in as {client.user}")
-    try:
-        from scheduler import setup_scheduler
-        setup_scheduler()
-        print("[DEBUG] 스케줄러 실행 완료")
-    except Exception as e:
-        print(f"[ERROR] 스케줄러 실행 중 오류 발생: {repr(e)}")
+    setup_scheduler()
 
 @client.event
 async def on_message(message):
