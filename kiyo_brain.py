@@ -3,6 +3,8 @@ import aiohttp
 from openai import AsyncOpenAI
 from datetime import datetime
 from notion_utils import fetch_recent_notion_summary
+import random
+import difflib
 
 USE_SILLYTAVERN = os.getenv("USE_SILLYTAVERN_API", "false").lower() == "true"
 SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/v1")
@@ -34,6 +36,15 @@ def extract_emoji_emotion(text):
     for emoji, emotion in emoji_map.items():
         if emoji in text:
             return emotion
+    return None
+
+def get_related_past_message(conversation_log, current_text):
+    past_user_msgs = [text for speaker, text in conversation_log[:-1] if speaker != "キヨ"]
+    if not past_user_msgs:
+        return None
+    similar = difflib.get_close_matches(current_text, past_user_msgs, n=1, cutoff=0.4)
+    if similar and random.random() < 0.3:
+        return similar[0]
     return None
 
 async def call_chat_completion(messages):
@@ -82,6 +93,7 @@ async def generate_kiyo_message(conversation_log):
     user_text = conversation_log[-1][1]
     emotion = await detect_emotion(user_text)
     emoji_emotion = extract_emoji_emotion(user_text)
+    recall_log = get_related_past_message(conversation_log, user_text)
 
     tone_instruction = {
         "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 응답해라.",
@@ -98,13 +110,15 @@ async def generate_kiyo_message(conversation_log):
     if emoji_emotion:
         tone_instruction += f" 또한, 유저는 '{emoji_emotion}' 감정을 드러내는 이모지를 사용했다. 이에 맞춰 반응하라."
 
+    recall_phrase = f" 참고로, 이전 대화에서 유저는 '{recall_log}'라고 말한 적이 있다. 이 기억을 회상하거나 연결하는 어조로 반응하라." if recall_log else ""
+
     notion_context = await fetch_recent_notion_summary()
     messages = [{
         "role": "system",
         "content": (
             f"너는 신구지 코레키요다. 정서영과 DM을 주고받고 있다. "
             f"지금 그녀의 감정 상태는 '{emotion}'이며, 그리고 {time_instruction} "
-            f"{tone_instruction} GPT처럼 분석하지 말고, 직접 정서영에게 말하듯 자연스럽게 대화해라. "
+            f"{tone_instruction}{recall_phrase} GPT처럼 분석하지 말고, 직접 정서영에게 말하듯 자연스럽게 대화해라. "
             f"말투는 '~다', '~해' 위주로 끊어 말하고, '~네요', '~같아요'는 절대 쓰지 마라. "
             f"최근 일기 요약: {notion_context}"
         )
