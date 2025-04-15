@@ -71,7 +71,14 @@ async def on_message(message):
 
         try:
             last_diary_time = await get_last_diary_timestamp()
-            filtered_log = [entry for entry in conversation_log if entry[0] != "キヨ" or datetime.now() > last_diary_time]
+            filtered_log = []
+            for speaker, text in conversation_log:
+                if speaker == "キヨ":
+                    continue
+                if hasattr(message, 'created_at') and message.created_at > last_diary_time:
+                    filtered_log.append((speaker, text))
+            if not filtered_log:
+                filtered_log = conversation_log[-12:]  # fallback
             diary_text = await generate_diary_entry(filtered_log)
             emotion = await detect_emotion(diary_text)
             await upload_to_notion(diary_text, emotion)
