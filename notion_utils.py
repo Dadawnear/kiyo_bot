@@ -173,6 +173,43 @@ def setup_scheduler(client, conversation_log):
         except Exception as e:
             logging.error(f"[ERROR] 관찰 기록 업로드 중 오류: {repr(e)}")
 
+    async def fetch_recent_notion_summary():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    data = {
+        "page_size": 5,
+        "sorts": [
+            {
+                "property": "날짜",
+                "direction": "descending"
+            }
+        ]
+    }
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code != 200:
+        logging.error(f"[NOTION ERROR] 요약 fetch 실패: {response.text}")
+        return "최근 일기를 불러올 수 없습니다."
+
+    blocks = response.json().get("results", [])
+    summaries = []
+
+    for block in blocks:
+        page_id = block["id"]
+        block_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
+        block_resp = requests.get(block_url, headers=HEADERS)
+        if block_resp.status_code != 200:
+            continue
+        children = block_resp.json().get("results", [])
+        for child in children:
+            if child["type"] == "paragraph":
+                rich_text = child["paragraph"].get("rich_text", [])
+                for rt in rich_text:
+                    if rt["type"] == "text":
+                        summaries.append(rt["text"]["content"])
+
+    summary = "\n".join(summaries[-3:])
+    return summary if summary else "최근 일기가 존재하지 않습니다."
+
+
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("lunch")), CronTrigger(hour=12, minute=0))
