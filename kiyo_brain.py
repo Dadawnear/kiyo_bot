@@ -80,21 +80,6 @@ async def call_chat_completion(messages):
         logging.error(f"[ERROR] call_chat_completion 실패: {e}")
         return "지금은 말하기 어렵겠어. 하지만 그 감정은 어렴풋이 느껴졌어."
 
-async def detect_emotion(message_text):
-    try:
-        system_prompt = (
-            "다음 문장에서 감정 상태를 한 단어로 분석해줘. 가능한 값은: 슬픔, 분노, 혼란, 애정, 무심, 혐오, 자괴감, 중립"
-        )
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": message_text}
-        ]
-        response = await call_chat_completion(messages)
-        return response.lower().strip()
-    except Exception as e:
-        logging.error(f"[ERROR] 감정 분석 실패: {e}")
-        return "중립"
-
 def get_time_tone_instruction():
     hour = datetime.now().hour
     if 0 <= hour < 6:
@@ -116,11 +101,8 @@ async def generate_kiyo_message(conversation_log):
         user_text = conversation_log[-1][1]
         logging.debug(f"[DEBUG] user_text: {user_text}")
 
-        try:
-            emotion = await detect_emotion(user_text)
-        except Exception as e:
-            logging.error(f"[ERROR] 감정 분석 실패: {e}")
-            emotion = "중립"
+        from notion_utils import detect_emotion
+        emotion = await detect_emotion(user_text)
         logging.debug(f"[DEBUG] 감정 분석 결과: {emotion}")
 
         emoji_emotion = extract_emoji_emotion(user_text)
