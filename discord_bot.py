@@ -7,7 +7,6 @@ from kiyo_brain import (
     generate_diary_and_image
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
-from scheduler import setup_scheduler
 
 load_dotenv()
 
@@ -23,7 +22,12 @@ def is_target_user(message):
 @client.event
 async def on_ready():
     print(f"[READY] Logged in as {client.user}")
-    setup_scheduler()
+    try:
+        from scheduler import setup_scheduler
+        setup_scheduler()
+        print("[DEBUG] 스케줄러 실행 완료")
+    except Exception as e:
+        print(f"[ERROR] 스케줄러 실행 중 오류 발생: {repr(e)}")
 
 @client.event
 async def on_message(message):
@@ -76,3 +80,7 @@ async def send_daily_summary():
 
 async def start_discord_bot():
     await client.start(DISCORD_BOT_TOKEN)
+
+# ✅ 더미 함수: 반드시 kiyo_brain.py에도 정의되어 있어야 함
+async def generate_diary_and_image(conversation_log):
+    print("[DEBUG] generate_diary_and_image 함수 호출됨 — 현재 더미입니다.")
