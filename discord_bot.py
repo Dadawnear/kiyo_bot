@@ -4,7 +4,7 @@ import asyncio
 from dotenv import load_dotenv
 from kiyo_brain import (
     generate_kiyo_message,
-    generate_diary_and_image  # ✅ 이제 오류 방지를 위해 이 함수는 반드시 있어야 함
+    generate_diary_and_image
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
 from scheduler import setup_scheduler
@@ -27,10 +27,15 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    if message.author == client.user or not is_target_user(message):
+    print(f"[DEBUG] author: {message.author}, content: {message.content}")
+
+    if message.author == client.user:
+        print("[DEBUG] 봇 자신의 메시지라 무시")
         return
 
-    print(f"[DEBUG] 수신된 메시지: {message.content}")
+    if not is_target_user(message):
+        print("[DEBUG] 타겟 유저가 아님:", message.author)
+        return
 
     if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
         parts = message.content.strip().split()
@@ -72,6 +77,6 @@ async def send_daily_summary():
 async def start_discord_bot():
     await client.start(DISCORD_BOT_TOKEN)
 
-# ✅ 임시 더미 함수 정의 (실제 내용은 kiyo_brain.py에 작성되어야 함)
+# ✅ 더미 함수: 반드시 kiyo_brain.py에도 정의되어 있어야 함
 async def generate_diary_and_image(conversation_log):
     print("[DEBUG] generate_diary_and_image 함수 호출됨 — 현재 더미입니다.")
