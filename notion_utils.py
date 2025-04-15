@@ -31,6 +31,7 @@ def get_virtual_diary_date():
     return datetime.now()
 
 async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
+    logging.debug(">>> Upload 함수 진입")
     diary_date = get_virtual_diary_date()
     date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
     iso_date = diary_date.strftime("%Y-%m-%d")
@@ -85,9 +86,15 @@ async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
     }
 
     response = requests.post(url, headers=HEADERS, json=data)
+    try:
+        result = response.json()
+    except Exception:
+        result = {}
+
     if response.status_code != 200:
-        logging.error(f"[NOTION ERROR] {response.status_code} - {response.text}")
+        logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
     else:
+        logging.info(f"[NOTION] 일기 생성 성공: {result.get('id', '응답에 ID 없음')}")
         logging.info("[NOTION] 일기 생성 성공")
 
 async def fetch_recent_notion_summary():
