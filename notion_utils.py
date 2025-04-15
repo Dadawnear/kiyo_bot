@@ -66,12 +66,10 @@ async def detect_emotion(text):
 async def generate_observation_log(conversation_log):
     logging.debug("[OBSERVATION] generate_observation_log 시작")
 
-    # 하루 기준: 오늘 날짜만 필터링
     now = datetime.now(timezone.utc)
-    start_of_day = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
     today_logs = [
         f"{speaker}: {content}" for speaker, content in conversation_log
-        if isinstance(content, str) and len(content.strip()) > 0  # 대사 유효성 검증
+        if isinstance(content, str) and len(content.strip()) > 0
     ]
 
     text = "\n".join(today_logs)
@@ -127,8 +125,6 @@ async def upload_observation_to_notion(text):
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# 수동 트리거용 명령어 추가 예정 / scheduler에도 연결 가능하게 확장 필요
-
 def setup_scheduler(client, conversation_log):
 
     from kiyo_brain import generate_kiyo_message_with_time
@@ -173,43 +169,6 @@ def setup_scheduler(client, conversation_log):
         except Exception as e:
             logging.error(f"[ERROR] 관찰 기록 업로드 중 오류: {repr(e)}")
 
-    async def fetch_recent_notion_summary():
-        url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-        data = {
-            "page_size": 5,
-            "sorts": [
-                {
-                    "property": "날짜",
-                    "direction": "descending"
-                }
-            ]
-        }
-        response = requests.post(url, headers=HEADERS, json=data)
-        if response.status_code != 200:
-            logging.error(f"[NOTION ERROR] 요약 fetch 실패: {response.text}")
-            return "최근 일기를 불러올 수 없습니다."
-
-        blocks = response.json().get("results", [])
-        summaries = []
-
-        for block in blocks:
-            page_id = block["id"]
-            block_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
-            block_resp = requests.get(block_url, headers=HEADERS)
-            if block_resp.status_code != 200:
-                continue
-            children = block_resp.json().get("results", [])
-            for child in children:
-                if child["type"] == "paragraph":
-                    rich_text = child["paragraph"].get("rich_text", [])
-                    for rt in rich_text:
-                        if rt["type"] == "text":
-                            summaries.append(rt["text"]["content"])
-
-        summary = "\n".join(summaries[-3:])
-        return summary if summary else "최근 일기가 존재하지 않습니다."
-
-
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("lunch")), CronTrigger(hour=12, minute=0))
@@ -219,3 +178,39 @@ def setup_scheduler(client, conversation_log):
     scheduler.add_job(lambda: asyncio.create_task(send_daily_observation()), CronTrigger(hour=2, minute=5))
 
     scheduler.start()
+
+async def fetch_recent_notion_summary():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    data = {
+        "page_size": 5,
+        "sorts": [
+            {
+                "property": "날짜",
+                "direction": "descending"
+            }
+        ]
+    }
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code != 200:
+        logging.error(f"[NOTION ERROR] 요약 fetch 실패: {response.text}")
+        return "최근 일기를 불러올 수 없습니다."
+
+    blocks = response.json().get("results", [])
+    summaries = []
+
+    for block in blocks:
+        page_id = block["id"]
+        block_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
+        block_resp = requests.get(block_url, headers=HEADERS)
+        if block_resp.status_code != 200:
+            continue
+        children = block_resp.json().get("results", [])
+        for child in children:
+            if child["type"] == "paragraph":
+                rich_text = child["paragraph"].get("rich_text", [])
+                for rt in rich_text:
+                    if rt["type"] == "text":
+                        summaries.append(rt["text"]["content"])
+
+    summary = "\n".join(summaries[-3:])
+    return summary if summary else "최근 일기가 존재하지 않습니다."
