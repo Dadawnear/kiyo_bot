@@ -10,6 +10,7 @@ from kiyo_brain import (
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
 import logging
 from datetime import datetime, timedelta
+import re
 
 load_dotenv()
 
@@ -50,10 +51,8 @@ async def on_message(message):
         return
 
     if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
-        parts = message.content.strip().split()
-        limit = 10
-        if len(parts) == 2 and parts[1].isdigit():
-            limit = int(parts[1])
+        match = re.search(r"!cleanup(\d*)", message.content.strip())
+        limit = int(match.group(1)) if match and match.group(1).isdigit() else 2
         await message.channel.send(f"{limit}개의 메시지를 정리할게. 크크…")
         deleted = 0
         async for msg in message.channel.history(limit=limit + 20):
