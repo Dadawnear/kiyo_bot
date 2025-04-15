@@ -11,7 +11,7 @@ SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-USER_NAMES = ["정서영", "서영이", "서영", "피험자", "작은 것", "애정하는 너"]
+USER_NAMES = ["정서영", "서영이", "서영", "너"]
 
 def extract_emoji_emotion(text):
     emoji_map = {
@@ -51,6 +51,18 @@ def get_related_past_message(conversation_log, current_text):
 
 def get_random_user_name():
     return random.choice(USER_NAMES)
+
+async def get_current_weather_desc():
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get("https://wttr.in/Mapo?format=j1") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    weather_desc = data["current_condition"][0]["weatherDesc"][0]["value"]
+                    return weather_desc
+        except:
+            pass
+    return None
 
 async def call_chat_completion(messages):
     if USE_SILLYTAVERN:
@@ -100,6 +112,7 @@ async def generate_kiyo_message(conversation_log):
     emoji_emotion = extract_emoji_emotion(user_text)
     recall_log = get_related_past_message(conversation_log, user_text)
     alt_name = get_random_user_name()
+    weather_desc = await get_current_weather_desc()
 
     tone_instruction = {
         "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 응답해라.",
@@ -115,6 +128,9 @@ async def generate_kiyo_message(conversation_log):
     time_instruction = get_time_tone_instruction()
     if emoji_emotion:
         tone_instruction += f" 또한, 유저는 '{emoji_emotion}' 감정을 드러내는 이모지를 사용했다. 이에 맞춰 반응하라."
+
+    if weather_desc:
+        tone_instruction += f" 현재 날씨는 '{weather_desc}'이다. 이 날씨에 어울리는 분위기와 어조로 응답해라."
 
     recall_phrase = f" 참고로, 이전 대화에서 유저는 '{recall_log}'라고 말한 적이 있다. 이 기억을 회상하거나 연결하는 어조로 반응하라." if recall_log else ""
 
