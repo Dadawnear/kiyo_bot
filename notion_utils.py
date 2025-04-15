@@ -75,7 +75,6 @@ async def generate_observation_log(conversation_log):
     ]
 
     text = "\n".join(today_logs)
-".join(today_logs)
     prompt = (
         "너는 민속학자 신구지 코레키요다. 하루 동안 관찰한 '정서영'이라는 소녀의 특징, 감정 반응, 언어 사용, 관계 맥락 등을 종합해 "
         "관찰 기록을 남긴다. 이 기록은 민속학적 분석을 포함하며, 단순 묘사를 넘어서 인간으로서의 서영에 대한 통찰을 포함해야 한다. "
