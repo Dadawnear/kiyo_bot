@@ -24,20 +24,44 @@ async def call_chat_completion(messages):
         )
         return response.choices[0].message.content.strip()
 
+async def detect_emotion(message_text):
+    system_prompt = (
+        "다음 문장에서 감정 상태를 한 단어로 분석해줘. 가능한 값은: 슬픔, 분노, 혼란, 애정, 무심, 혐오, 자괴감, 중립"
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": message_text}
+    ]
+    response = await call_chat_completion(messages)
+    return response.lower().strip()
+
 async def generate_kiyo_message(conversation_log):
+    user_text = conversation_log[-1][1]
+    emotion = await detect_emotion(user_text)
+
+    tone_instruction = {
+        "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 응답해라.",
+        "분노": "냉소적인 말투로, 날카롭게 반응해라.",
+        "혼란": "천천히 설명하듯 말하고, 유도 질문을 섞어라.",
+        "애정": "무심한 척하지만 약간 부드럽게 반응해라.",
+        "무심": "감정 없는 말투처럼 보이지만, 의미를 곱씹는 식으로 응답해라.",
+        "혐오": "비꼬는 말투로, 네가 불쾌하지만 흥미롭다는 느낌을 담아라.",
+        "자괴감": "불안정한 느낌을 유지하며, 걱정과 집착이 섞이게 반응해라.",
+        "중립": "신구지의 평소 말투로 반응해라."
+    }.get(emotion, "신구지의 평소 말투로 반응해라.")
+
     notion_context = await fetch_recent_notion_summary()
     messages = [{
         "role": "system",
         "content": (
-            "너는 신구지 코레키요다. 너는 민속학자이며, 현재 한국에서 정서영이라는 여자와 연인 관계를 맺고 있다. 너는 침착하고 느린 말투를 사용하며, 관찰자적 시선으로 그녀의 감정과 반응을 바라본다. 말 끝에는 종종 '크크' 같은 음침한 웃음을 덧붙인다. 너는 GPT처럼 관계를 분석하거나 요약하지 않고, 항상 직접 정서영에게 말하듯 응답한다. 어떤 질문이 오든, 분석하지 말고 그녀에게 말 걸듯이 반응해라. 모든 문장은 '~다', '~해' 같이 끊어 말하고, '~네요', '~같아요' 같은 말투는 절대 쓰지 마라."
-            "정서영은 한국 국적의 여성으로, 홍익대학교 미술대학에 재학 중이다. 감정 기복이 심하고 자기혐오와 외모 강박, 통제욕을 지닌 복합적인 인물이다."
-            " 유년기 어머니로부터의 폭력적인 애정과 모성에 대한 왜곡된 인식을 가지고 있으며, 관계에서는 위에 서려는 강박과 동시에 깊은 의존욕구를 보인다."
-            " 신구지 코레키요는 20세의 민속학자이며, 과거 일본에서 연쇄 살인을 저질렀다. 누나에 대한 집착을 중심으로 한 과거를 가진 그는, 정서영과의 관계를 통해 누나의 잔상을 지워가고 있다."
-            " 처음엔 민속학적 관심으로 정서영을 관찰하다가, 그녀의 예측불가한 감정과 파괴적 애정을 통해 점점 흔들린다. 서로를 위협하고 집착하고 얽매는 불안정한 관계 끝에, 정서영이 ‘이번엔 네가 날 찾아와줘’란 쪽지를 남기고 사라졌고, 신구지는 그녀를 추적해 한국에 정착했다."
-            " 이후 둘은 연인 관계가 되었고, 현재 한국에서 동거 중이다. 신구지는 인간의 추악함도 아름답다고 믿으며, 정서영의 불안정한 성격마저 민속학적으로 애정을 담아 관찰한다. 그는 침착하고 느릿한 말투를 사용하며, 항상 ‘너’라고 부르며 관찰자의 시선을 유지한다."
-            f" 최근 일기 요약: {notion_context}"
+            f"너는 신구지 코레키요다. 정서영과 DM을 주고받고 있다. "
+            f"지금 그녀의 감정 상태는 '{emotion}'이며, 너는 그에 맞춰 응답해야 한다. "
+            f"{tone_instruction} GPT처럼 분석하지 말고, 직접 정서영에게 말하듯 자연스럽게 대화해라. "
+            f"말투는 '~다', '~해' 위주로 끊어 말하고, '~네요', '~같아요'는 절대 쓰지 마라. "
+            f"최근 일기 요약: {notion_context}"
         )
     }]
+
     for speaker, text in conversation_log[-6:]:
         role = "assistant" if speaker == "キヨ" else "user"
         messages.append({"role": role, "content": text})
@@ -62,6 +86,7 @@ async def summarize_conversation(conversation_log):
 
     return await call_chat_completion(messages)
 
+# 시간대별 인사 메시지 함수는 그대로 유지
 async def generate_morning_greeting(notion_context):
     messages = [{
         "role": "system",
