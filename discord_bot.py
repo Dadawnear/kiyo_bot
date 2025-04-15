@@ -44,13 +44,25 @@ async def on_message(message):
                 deleted += 1
                 if deleted >= limit:
                     break
+        conversation_log.clear()
         return
 
     # ✅ 일반 메시지 처리
-    conversation_log.append(("정서영", message.content))
-    response = await generate_kiyo_message(conversation_log)
-    conversation_log.append(("キヨ", response))
-    await message.channel.send(response)
+    if not message.content.strip():
+        return
+
+    if len(conversation_log) == 0:
+        conversation_log.append(("정서영", message.content))
+    else:
+        conversation_log.append(("정서영", message.content))
+
+    try:
+        response = await generate_kiyo_message(conversation_log)
+        conversation_log.append(("キヨ", response))
+        await message.channel.send(response)
+    except Exception as e:
+        print("[ERROR] 응답 생성 중 오류:", e)
+        await message.channel.send("크크… 뭔가 문제가 있었던 것 같아. 다시 말해줄래?")
 
 async def send_daily_summary():
     if conversation_log:
