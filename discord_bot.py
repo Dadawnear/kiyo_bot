@@ -4,7 +4,7 @@ import asyncio
 from dotenv import load_dotenv
 from kiyo_brain import (
     generate_kiyo_message,
-    generate_diary_and_image,
+    generate_diary_entry,
     detect_emotion
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
@@ -70,28 +70,14 @@ async def on_message(message):
             await message.channel.send("크크… 아직 나눈 이야기가 없네.")
             return
 
-        now = datetime.now()
-        since = now - timedelta(days=1)
-
-        last_kiyo_response = ""
-        last_user_input = ""
-
-        for i in reversed(range(len(conversation_log))):
-            speaker, text = conversation_log[i]
-            if speaker == "キヨ":
-                last_kiyo_response = text
-                if i > 0 and conversation_log[i - 1][0] != "キヨ":
-                    last_user_input = conversation_log[i - 1][1]
-                break
-
-        if not last_kiyo_response:
-            await message.channel.send("크크… 아직 기록할 대답이 없네.")
-            return
-
-        logging.debug("[DIARY] 마지막 응답과 감정 분석 시작")
-        emotion = await detect_emotion(last_user_input or last_kiyo_response)
-        await upload_to_notion(last_kiyo_response, emotion=emotion)
-        await message.channel.send("방금까지의 대화를 일기로 남겼어. 크크…")
+        try:
+            diary_text = await generate_diary_entry(conversation_log)
+            emotion = await detect_emotion(diary_text)
+            await upload_to_notion(diary_text, emotion)
+            await message.channel.send("방금까지의 대화를 일기로 남겼어. 크크…")
+        except Exception as e:
+            logging.error(f"[ERROR] 일기 생성 중 오류: {repr(e)}")
+            await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아. 조금 있다가 다시 시도해줘.")
         return
 
     if not message.content.strip():
