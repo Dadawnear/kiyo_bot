@@ -8,7 +8,7 @@ from kiyo_brain import (
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary, get_last_diary_timestamp, generate_diary_entry
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import re
 
 load_dotenv()
@@ -71,14 +71,15 @@ async def on_message(message):
 
         try:
             last_diary_time = await get_last_diary_timestamp()
+            if last_diary_time.tzinfo is None:
+                last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
+
             filtered_log = []
+            now = datetime.now(timezone.utc)
             for speaker, text in conversation_log:
-                if speaker == "キヨ":
-                    continue
-                if hasattr(message, 'created_at') and message.created_at > last_diary_time:
-                    filtered_log.append((speaker, text))
-            if not filtered_log:
-                filtered_log = conversation_log[-12:]  # fallback
+                # 여기에 메시지의 시간 정보를 부여하려면 외부에서 저장해야 함 (여기선 생략)
+                filtered_log.append((speaker, text))
+
             diary_text = await generate_diary_entry(filtered_log)
             emotion = await detect_emotion(diary_text)
             await upload_to_notion(diary_text, emotion)
