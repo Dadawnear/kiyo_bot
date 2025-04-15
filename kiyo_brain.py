@@ -14,7 +14,7 @@ SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-USER_NAMES = ["정서영", "서영이", "서영", "너"]
+USER_NAMES = ["정서영", "서영", "너"]
 
 EXAMPLE_LINES = [
     "모든 인간은 추악한 면을 포함해서 아름다워.",
@@ -26,7 +26,7 @@ EXAMPLE_LINES = [
 def extract_emoji_emotion(text):
     emoji_map = {
         "😢": "슬픔", "😭": "절망적인 슬픔", "😂": "과장된 웃음", "🥲": "억지 웃음",
-        "😅": "민망함", "💀": "냉소", "😠": "분노", "🥺": "애교", "🫩": "감정 억제된 애정",
+        "😅": "민망함", "💀": "냉소", "😠": "분노", "🥺": "애교", "🥹": "감정 억제된 애정",
         "❤️": "강한 애정", "🥰": "사랑스러움", "😍": "강렬한 호감", "😁": "쾌활함",
         "😊": "잔잔한 기쁨", "😳": "당황함", "😶": "무표정", "✌️": "자신감", "👍": "동의",
         "☺️": "수줍음"
