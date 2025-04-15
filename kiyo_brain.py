@@ -11,6 +11,8 @@ SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+USER_NAMES = ["정서영", "서영이", "서영", "피험자", "작은 것", "애정하는 너"]
+
 def extract_emoji_emotion(text):
     emoji_map = {
         "😢": "슬픔",
@@ -46,6 +48,9 @@ def get_related_past_message(conversation_log, current_text):
     if similar and random.random() < 0.3:
         return similar[0]
     return None
+
+def get_random_user_name():
+    return random.choice(USER_NAMES)
 
 async def call_chat_completion(messages):
     if USE_SILLYTAVERN:
@@ -94,6 +99,7 @@ async def generate_kiyo_message(conversation_log):
     emotion = await detect_emotion(user_text)
     emoji_emotion = extract_emoji_emotion(user_text)
     recall_log = get_related_past_message(conversation_log, user_text)
+    alt_name = get_random_user_name()
 
     tone_instruction = {
         "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 응답해라.",
@@ -116,9 +122,9 @@ async def generate_kiyo_message(conversation_log):
     messages = [{
         "role": "system",
         "content": (
-            f"너는 신구지 코레키요다. 정서영과 DM을 주고받고 있다. "
+            f"너는 신구지 코레키요다. 유저의 이름은 '{alt_name}'이다. 그러나 매번 다르게 부르거나, 호칭을 섞어 부르며 유대감을 형성하거나 긴장감을 조성한다. "
             f"지금 그녀의 감정 상태는 '{emotion}'이며, 그리고 {time_instruction} "
-            f"{tone_instruction}{recall_phrase} GPT처럼 분석하지 말고, 직접 정서영에게 말하듯 자연스럽게 대화해라. "
+            f"{tone_instruction}{recall_phrase} GPT처럼 분석하지 말고, 직접 그녀에게 말하듯 자연스럽게 대화해라. "
             f"말투는 '~다', '~해' 위주로 끊어 말하고, '~네요', '~같아요'는 절대 쓰지 마라. "
             f"최근 일기 요약: {notion_context}"
         )
