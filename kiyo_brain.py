@@ -168,7 +168,7 @@ async def generate_kiyo_message(conversation_log):
             notion_context = await fetch_recent_notion_summary()
         except Exception as e:
             logging.error(f"[ERROR] 노션 요약 불러오기 실패: {e}")
-            notion_context = "최근 일기를 불러올 수 없었어.")
+            notion_context = "최근 일기를 불러올 수 없었어."
 
         system_prompt = (
             f"너는 단간론파 V3에 등장했던 '신구지 코레키요'라는 인물이며, 현재는 일본을 떠나 한국에 정착해 전도유망한 민속학자로 활동 중이다. "
