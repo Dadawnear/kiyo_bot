@@ -14,6 +14,7 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 USER_DISCORD_NAME = os.getenv("USER_DISCORD_NAME")
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
+NOTION_OBSERVATION_DB_ID = os.getenv("NOTION_OBSERVATION_DB_ID")  # 새 항목
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 intents = discord.Intents.default()
@@ -62,26 +63,27 @@ async def detect_emotion(text):
         return "망상"
     return "기록"
 
-async def generate_diary_entry(conversation_log, style="full_diary"):
-    logging.debug("[DIARY] generate_diary_entry 시작")
-    user_dialogue = "\n".join([f"{speaker}: {text}" for speaker, text in conversation_log if text.strip()])
+async def generate_observation_log(conversation_log):
+    logging.debug("[OBSERVATION] generate_observation_log 시작")
 
-    base_prompt = {
-        "full_diary": (
-            "너는 단간론파 V3의 민속학자 신구지 코레키요로, 한국에 거주 중이며 정서영이라는 소녀와 함께 살고 있다. "
-            "지금까지 나눈 대화를 회고하고, 오늘 하루 있었던 너 자신의 사적인 일상까지 상상하여, "
-            "신구지가 직접 일기를 쓰듯 긴 호흡으로 감정과 철학을 녹여 작성해라. "
-            "특히 서영과의 관계에서 느낀 긴장, 애정, 유혹, 불안 등의 감정을 반추하며, "
-            "그녀와의 대화를 민속학자의 시선으로 분석하고, 너 자신의 집착과 반응에 대해 내면적으로 해석하라. "
-            "말투는 반말이며, 5~7문단 분량으로 써라."
-        ),
-        "fragment": "신구지가 느낀 감정을 시처럼, 혹은 짧은 단상처럼 적어. 한 문단 정도. 철학적이고 단편적인 문장으로.",
-        "dream_record": "신구지가 꾼 꿈을 일기처럼 적어. 몽환적이고 파편적인 문장으로, 실제와 환상이 섞여있다.",
-        "ritual_entry": "신구지가 민속학자로서 조사한 내용을 학술 기록처럼 정리하되, 서영과 연결지어 일기처럼 적어."
-    }
+    # 하루 기준: 오늘 날짜만 필터링
+    now = datetime.now(timezone.utc)
+    start_of_day = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    today_logs = [
+        f"{speaker}: {content}" for speaker, content in conversation_log
+        if isinstance(content, str) and len(content.strip()) > 0  # 대사 유효성 검증
+    ]
 
-    system_prompt = base_prompt.get(style, base_prompt["full_diary"])
-    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_dialogue}]
+    text = "\n".join(today_logs)
+    prompt = (
+        "너는 민속학자 신구지 코레키요다. 하루 동안 관찰한 '정서영'이라는 소녀의 특징, 감정 반응, 언어 사용, 관계 맥락 등을 종합해 "
+        "관찰 기록을 남긴다. 이 기록은 민속학적 분석을 포함하며, 단순 묘사를 넘어서 인간으로서의 서영에 대한 통찰을 포함해야 한다. "
+        "문장은 차분하고 분석적이어야 하며, 마치 학술 노트처럼 읽힌다."
+    )
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": text}
+    ]
 
     response = await openai_client.chat.completions.create(
         model="gpt-4o",
@@ -90,92 +92,36 @@ async def generate_diary_entry(conversation_log, style="full_diary"):
     )
     return response.choices[0].message.content.strip()
 
-async def generate_diary_image_prompt(diary_text):
-    try:
-        logging.debug("[IMAGE PROMPT] 일기 내용 기반 이미지 프롬프트 생성 중")
-        system_prompt = (
-            "다음 일기 내용을 바탕으로, 마치 신구지가 카메라로 촬영해 일기에 붙여놓은 듯한, "
-            "cinematic하고 민속학적이며 분위기 있는 장면 하나를 묘사해줘. 100자 이내 영어 프롬프트로, 구체적이고 시각적인 묘사를 포함해."
-        )
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": diary_text}
-        ]
-        result = await openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=0.7
-        )
-        return result.choices[0].message.content.strip()
-    except Exception as e:
-        logging.error(f"[IMAGE PROMPT ERROR] 프롬프트 생성 실패: {e}")
-        return "a cinematic Japanese diary with folklore atmosphere"
+async def upload_observation_to_notion(text):
+    now = get_virtual_diary_date()
+    date_str = now.strftime("%Y년 %m월 %d일")
+    iso_date = now.strftime("%Y-%m-%d")
 
-async def upload_to_notion(text, emotion_key="기록"):
-    diary_date = get_virtual_diary_date()
-    date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
-    iso_date = diary_date.strftime("%Y-%m-%d")
-    tags = EMOTION_TAGS.get(emotion_key, ["중립"])
-
-    time_info = diary_date.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
-    meta_block = {
-        "object": "block",
-        "type": "quote",
-        "quote": {
-            "rich_text": [{"type": "text", "text": {"content": f"🕰️ 작성 시간: {time_info}"}}]
-        }
-    }
-
-    try:
-        image_prompt = await generate_diary_image_prompt(text)
-        image_response = await openai_client.images.generate(
-            model="dall-e-3",
-            prompt=image_prompt,
-            size="1024x1024",
-            quality="standard",
-            n=1
-        )
-        image_url = image_response.data[0].url
-        logging.debug(f"[NOTION IMAGE] 생성된 프롬프트: {image_prompt}")
-        logging.debug(f"[NOTION IMAGE] 이미지 URL 생성됨: {image_url}")
-    except Exception as e:
-        logging.warning(f"[NOTION IMAGE] 이미지 생성 실패: {e}")
-        image_url = None
-
-    children = [meta_block]
-    if image_url:
-        children.append({
-            "object": "block",
-            "type": "image",
-            "image": {
-                "type": "external",
-                "external": {"url": image_url},
-                "caption": [{"type": "text", "text": {"content": image_prompt}}]
-            }
-        })
-
-    children.append({
-        "object": "block",
-        "type": "paragraph",
-        "paragraph": {
-            "rich_text": [{"type": "text", "text": {"content": text}}]
-        }
-    })
-
-    url = "https://api.notion.com/v1/pages"
-    data = {
-        "parent": {"database_id": NOTION_DATABASE_ID},
+    payload = {
+        "parent": {"database_id": NOTION_OBSERVATION_DB_ID},
         "properties": {
-            "Name": {"title": [{"text": {"content": date_str}}]},
-            "날짜": {"date": {"start": iso_date}},
-            "태그": {"multi_select": [{"name": tag} for tag in tags]}
+            "이름": {"title": [{"text": {"content": date_str}}]},
+            "날짜": {"date": {"start": iso_date}}
         },
-        "children": children
+        "children": [
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": text}}]
+                }
+            }
+        ]
     }
 
-    response = requests.post(url, headers=HEADERS, json=data)
-    result = response.json() if response.status_code == 200 else {}
-    if response.status_code != 200:
-        logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
-    else:
-        logging.info(f"[NOTION] 업로드 성공: {result.get('id')}")
+    try:
+        response = requests.post("https://api.notion.com/v1/pages", headers=HEADERS, json=payload)
+        result = response.json() if response.status_code == 200 else {}
+        if response.status_code != 200:
+            logging.error(f"[NOTION OBS ERROR] {response.status_code} - {result}")
+        else:
+            logging.info(f"[NOTION OBS] 업로드 성공: {result.get('id')}")
+    except Exception as e:
+        logging.error(f"[NOTION OBS ERROR] 업로드 실패: {e}")
+
+# 수동 트리거용 명령어 추가 예정 / scheduler에도 연결 가능하게 확장 필요
