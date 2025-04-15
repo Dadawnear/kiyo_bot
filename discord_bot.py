@@ -76,7 +76,3 @@ async def send_daily_summary():
 
 async def start_discord_bot():
     await client.start(DISCORD_BOT_TOKEN)
-
-# ✅ 더미 함수: 반드시 kiyo_brain.py에도 정의되어 있어야 함
-async def generate_diary_and_image(conversation_log):
-    print("[DEBUG] generate_diary_and_image 함수 호출됨 — 현재 더미입니다.")
