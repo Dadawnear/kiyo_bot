@@ -3,12 +3,13 @@ import requests
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import logging
+
 logging.getLogger().setLevel(logging.DEBUG)
 
 load_dotenv()
 
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
-NOTION_DATABASE_ID = "1d63ecdaf4c380968badd1d25ab21ca5"  # 갤러리 DB ID
+NOTION_DATABASE_ID = "1d63ecdaf4c380968badd1d25ab21ca5"
 
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -24,13 +25,14 @@ EMOTION_TAGS = {
     "무심": ["무기력"],
     "혐오": ["혐오"],
     "자괴감": ["자기혐오"],
-    "중립": ["관찰"]
+    "중립": ["관찰"],
+    "결심": ["의지"]
 }
 
 def get_virtual_diary_date():
     return datetime.now()
 
-async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
+async def upload_diary_entry(text, emotion="중립"):
     logging.debug(">>> Upload 함수 진입")
     diary_date = get_virtual_diary_date()
     date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
@@ -62,14 +64,6 @@ async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
         "children": [
             {
                 "object": "block",
-                "type": "image",
-                "image": {
-                    "type": "external",
-                    "external": { "url": image_url }
-                }
-            },
-            {
-                "object": "block",
                 "type": "paragraph",
                 "paragraph": {
                     "rich_text": [
@@ -95,10 +89,10 @@ async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
         logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
     else:
         logging.info(f"[NOTION] 일기 생성 성공: {result.get('id', '응답에 ID 없음')}")
-        logging.info("[NOTION] upload_diary_entry_with_image 끝까지 도달")
+        logging.info("[NOTION] upload_diary_entry 끝까지 도달")
 
 async def fetch_recent_notion_summary():
-    url = "https://api.notion.com/v1/databases/{}/query".format(NOTION_DATABASE_ID)
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
     data = {
         "page_size": 5,
         "sorts": [
@@ -136,7 +130,7 @@ async def fetch_recent_notion_summary():
 async def upload_to_notion(text, emotion="중립"):
     logging.debug(f"[NOTION DEBUG] upload_to_notion 호출됨, emotion: {emotion}")
     try:
-        await upload_diary_entry_with_image(text, image_url="https://via.placeholder.com/1", emotion=emotion)
-        logging.debug("[NOTION DEBUG] upload_diary_entry_with_image 호출 완료")
+        await upload_diary_entry(text, emotion=emotion)
+        logging.debug("[NOTION DEBUG] upload_diary_entry 호출 완료")
     except Exception as e:
         logging.error(f"[NOTION ERROR] upload_to_notion 내부 오류: {e}")
