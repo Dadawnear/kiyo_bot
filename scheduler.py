@@ -1,27 +1,39 @@
-# scheduler.py
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+import asyncio
+import logging
+import os
+import discord
+from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image
 
-def setup_scheduler():
-    # 👇 이 import들을 함수 안으로 옮겨서, 실행 시점에만 가져오도록 하면 순환 참조 안 남
-    from discord_bot import (
-        send_morning_greeting,
-        send_lunch_checkin,
-        send_evening_checkin,
-        send_night_checkin
-    )
-    from kiyo_brain import generate_diary_and_image
-    from discord_bot import conversation_log
+# 스케줄러가 client와 conversation_log를 인자로 받아야 순환참조 피할 수 있음
+def setup_scheduler(client, conversation_log):
+
+    async def send_kiyo_message(time_context):
+        try:
+            if conversation_log is not None:
+                conversation_log.append(("정서영", f"[{time_context}] 시각에 자동 전송된 시스템 메시지"))
+                response = await generate_kiyo_message_with_time(conversation_log, time_context)
+                conversation_log.append(("キヨ", response))
+                user = discord.utils.get(client.users, name=os.getenv("USER_DISCORD_NAME"))
+                if user:
+                    await user.send(response)
+        except Exception as e:
+            logging.error(f"[ERROR] scheduled message error: {repr(e)}")
 
     async def send_daily_summary():
-        if conversation_log:
-            await generate_diary_and_image(conversation_log)
-            conversation_log.clear()
+        try:
+            if conversation_log:
+                await generate_diary_and_image(conversation_log)
+                conversation_log.clear()
+        except Exception as e:
+            logging.error(f"[ERROR] 일기 업로드 중 오류: {repr(e)}")
 
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
-    scheduler.add_job(send_morning_greeting, CronTrigger(hour=9, minute=0))
-    scheduler.add_job(send_lunch_checkin, CronTrigger(hour=12, minute=0))
-    scheduler.add_job(send_evening_checkin, CronTrigger(hour=18, minute=0))
-    scheduler.add_job(send_night_checkin, CronTrigger(hour=23, minute=0))
-    scheduler.add_job(send_daily_summary, CronTrigger(hour=2, minute=0))
+    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
+    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("lunch")), CronTrigger(hour=12, minute=0))
+    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("evening")), CronTrigger(hour=18, minute=0))
+    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("night")), CronTrigger(hour=23, minute=0))
+    scheduler.add_job(lambda: asyncio.create_task(send_daily_summary()), CronTrigger(hour=2, minute=0))
+
     scheduler.start()
