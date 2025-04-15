@@ -2,6 +2,7 @@ import os
 import requests
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+import logging
 
 load_dotenv()
 
@@ -26,10 +27,7 @@ EMOTION_TAGS = {
 }
 
 def get_virtual_diary_date():
-    now = datetime.now()
-    if now.hour < 2:
-        return now - timedelta(days=1)
-    return now
+    return datetime.now()
 
 async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
     diary_date = get_virtual_diary_date()
@@ -87,9 +85,9 @@ async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
 
     response = requests.post(url, headers=HEADERS, json=data)
     if response.status_code != 200:
-        print("❌ Failed to create diary entry:", response.status_code, response.text)
+        logging.error(f"[NOTION ERROR] {response.status_code} - {response.text}")
     else:
-        print("✅ Diary entry created successfully.")
+        logging.info("[NOTION] 일기 생성 성공")
 
 async def fetch_recent_notion_summary():
     url = "https://api.notion.com/v1/databases/{}/query".format(NOTION_DATABASE_ID)
@@ -104,7 +102,7 @@ async def fetch_recent_notion_summary():
     }
     response = requests.post(url, headers=HEADERS, json=data)
     if response.status_code != 200:
-        print("Failed to fetch Notion content:", response.text)
+        logging.error(f"[NOTION ERROR] 요약 fetch 실패: {response.text}")
         return "최근 일기를 불러올 수 없습니다."
 
     blocks = response.json().get("results", [])
@@ -127,6 +125,5 @@ async def fetch_recent_notion_summary():
     summary = "\n".join(summaries[-3:])
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
-# 일반 텍스트만 추가할 경우에도 쓸 수 있는 버전
 async def upload_to_notion(text, emotion="중립"):
     await upload_diary_entry_with_image(text, image_url="https://via.placeholder.com/1", emotion=emotion)
