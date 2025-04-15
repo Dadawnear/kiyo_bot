@@ -57,7 +57,9 @@ async def on_message(message):
         conversation_log.append(("정서영", message.content))
 
     try:
+        print("[DEBUG] 사용자 입력 메시지:", message.content)
         response = await generate_kiyo_message(conversation_log)
+        print("[DEBUG] 생성된 응답:", response)
         conversation_log.append(("キヨ", response))
         await message.channel.send(response)
     except Exception as e:
