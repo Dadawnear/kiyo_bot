@@ -1,6 +1,7 @@
 import os
 import aiohttp
 from openai import AsyncOpenAI
+from datetime import datetime
 from notion_utils import fetch_recent_notion_summary
 
 USE_SILLYTAVERN = os.getenv("USE_SILLYTAVERN_API", "false").lower() == "true"
@@ -35,6 +36,21 @@ async def detect_emotion(message_text):
     response = await call_chat_completion(messages)
     return response.lower().strip()
 
+def get_time_tone_instruction():
+    hour = datetime.now().hour
+    if 0 <= hour < 6:
+        return "새벽이다. 몽환적이고 음산한 분위기로, 혼잣말을 섞어 응답해라."
+    elif 6 <= hour < 11:
+        return "아침이다. 느릿하고 다정한 말투로, 기상 인사를 건네듯 말해라."
+    elif 11 <= hour < 14:
+        return "점심시간이다. 식사 여부를 걱정하며 조용하게 말을 건네라."
+    elif 14 <= hour < 18:
+        return "오후다. 관찰자적이고 여유로운 말투로, 민속 이야기나 생각을 섞어라."
+    elif 18 <= hour < 22:
+        return "저녁이다. 피곤함을 배려하는 말투로, 부드럽게 응답해라."
+    else:
+        return "밤이다. 집착이 느껴지게, 느리고 나른한 말투로 응답해라."
+
 async def generate_kiyo_message(conversation_log):
     user_text = conversation_log[-1][1]
     emotion = await detect_emotion(user_text)
@@ -50,12 +66,14 @@ async def generate_kiyo_message(conversation_log):
         "중립": "신구지의 평소 말투로 반응해라."
     }.get(emotion, "신구지의 평소 말투로 반응해라.")
 
+    time_instruction = get_time_tone_instruction()
     notion_context = await fetch_recent_notion_summary()
+
     messages = [{
         "role": "system",
         "content": (
             f"너는 신구지 코레키요다. 정서영과 DM을 주고받고 있다. "
-            f"지금 그녀의 감정 상태는 '{emotion}'이며, 너는 그에 맞춰 응답해야 한다. "
+            f"지금 그녀의 감정 상태는 '{emotion}'이며, 그리고 {time_instruction} "
             f"{tone_instruction} GPT처럼 분석하지 말고, 직접 정서영에게 말하듯 자연스럽게 대화해라. "
             f"말투는 '~다', '~해' 위주로 끊어 말하고, '~네요', '~같아요'는 절대 쓰지 마라. "
             f"최근 일기 요약: {notion_context}"
