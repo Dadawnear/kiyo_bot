@@ -14,7 +14,7 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 USER_DISCORD_NAME = os.getenv("USER_DISCORD_NAME")
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
-NOTION_OBSERVATION_DB_ID = os.getenv("NOTION_OBSERVATION_DB_ID")  # 새 항목
+NOTION_OBSERVATION_DB_ID = os.getenv("NOTION_OBSERVATION_DB_ID")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 intents = discord.Intents.default()
@@ -63,6 +63,34 @@ async def detect_emotion(text):
         return "망상"
     return "기록"
 
+async def generate_diary_entry(conversation_log, style="full_diary"):
+    logging.debug("[DIARY] generate_diary_entry 시작")
+    user_dialogue = "\n".join([f"{speaker}: {text}" for speaker, text in conversation_log if text.strip()])
+
+    base_prompt = {
+        "full_diary": (
+            "너는 단간론파 V3의 민속학자 신구지 코레키요로, 한국에 거주 중이며 정서영이라는 소녀와 함께 살고 있다. "
+            "지금까지 나눈 대화를 회고하고, 오늘 하루 있었던 너 자신의 사적인 일상까지 상상하여, "
+            "신구지가 직접 일기를 쓰듯 긴 호흡으로 감정과 철학을 녹여 작성해라. "
+            "특히 서영과의 관계에서 느낀 긴장, 애정, 유혹, 불안 등의 감정을 반추하며, "
+            "그녀와의 대화를 민속학자의 시선으로 분석하고, 너 자신의 집착과 반응에 대해 내면적으로 해석하라. "
+            "말투는 반말이며, 5~7문단 분량으로 써라."
+        ),
+        "fragment": "신구지가 느낀 감정을 시처럼, 혹은 짧은 단상처럼 적어. 한 문단 정도. 철학적이고 단편적인 문장으로.",
+        "dream_record": "신구지가 꾼 꿈을 일기처럼 적어. 몽환적이고 파편적인 문장으로, 실제와 환상이 섞여있다.",
+        "ritual_entry": "신구지가 민속학자로서 조사한 내용을 학술 기록처럼 정리하되, 서영과 연결지어 일기처럼 적어."
+    }
+
+    system_prompt = base_prompt.get(style, base_prompt["full_diary"])
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_dialogue}]
+
+    response = await openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        temperature=0.7
+    )
+    return response.choices[0].message.content.strip()
+
 async def generate_observation_log(conversation_log):
     logging.debug("[OBSERVATION] generate_observation_log 시작")
 
@@ -89,6 +117,48 @@ async def generate_observation_log(conversation_log):
         temperature=0.7
     )
     return response.choices[0].message.content.strip()
+
+async def upload_to_notion(text, emotion_key="기록"):
+    diary_date = get_virtual_diary_date()
+    date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
+    iso_date = diary_date.strftime("%Y-%m-%d")
+    tags = EMOTION_TAGS.get(emotion_key, ["중립"])
+
+    time_info = diary_date.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
+    meta_block = {
+        "object": "block",
+        "type": "quote",
+        "quote": {
+            "rich_text": [{"type": "text", "text": {"content": f"🕰️ 작성 시간: {time_info}"}}]
+        }
+    }
+
+    url = "https://api.notion.com/v1/pages"
+    data = {
+        "parent": {"database_id": NOTION_DATABASE_ID},
+        "properties": {
+            "Name": {"title": [{"text": {"content": date_str}}]},
+            "날짜": {"date": {"start": iso_date}},
+            "태그": {"multi_select": [{"name": tag} for tag in tags]}
+        },
+        "children": [
+            meta_block,
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": text}}]
+                }
+            }
+        ]
+    }
+
+    response = requests.post(url, headers=HEADERS, json=data)
+    result = response.json() if response.status_code == 200 else {}
+    if response.status_code != 200:
+        logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
+    else:
+        logging.info(f"[NOTION] 업로드 성공: {result.get('id')}")
 
 async def upload_observation_to_notion(text):
     now = get_virtual_diary_date()
@@ -122,62 +192,21 @@ async def upload_observation_to_notion(text):
     except Exception as e:
         logging.error(f"[NOTION OBS ERROR] 업로드 실패: {e}")
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+async def get_last_diary_timestamp():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    data = {
+        "page_size": 1,
+        "sorts": [{"property": "날짜", "direction": "descending"}]
+    }
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code != 200:
+        return datetime.now() - timedelta(days=1)
 
-def setup_scheduler(client, conversation_log):
-
-    from kiyo_brain import generate_kiyo_message_with_time
-    from notion_utils import generate_diary_entry, detect_emotion, upload_to_notion, generate_observation_log, upload_observation_to_notion
-
-    async def send_kiyo_message(time_context):
-        try:
-            logging.debug(f"[SCHEDULER] {time_context} 시각 자동 메시지 전송 시작")
-            if conversation_log is not None:
-                conversation_log.append(("정서영", f"[{time_context}] 시각에 자동 전송된 시스템 메시지"))
-                response = await generate_kiyo_message_with_time(conversation_log, time_context)
-                conversation_log.append(("キヨ", response))
-                user = discord.utils.get(client.users, name=os.getenv("USER_DISCORD_NAME"))
-                if user:
-                    await user.send(response)
-                logging.debug("[SCHEDULER] 키요 메시지 전송 완료")
-        except Exception as e:
-            logging.error(f"[ERROR] scheduled message error: {repr(e)}")
-
-    async def send_daily_summary():
-        try:
-            logging.debug("[SCHEDULER] 일기 자동 생성 시작")
-            if conversation_log:
-                import random
-                styles = ["full_diary", "dream_record", "fragment", "ritual_entry"]
-                chosen_style = random.choice(styles)
-                logging.debug(f"[SCHEDULER] 선택된 일기 스타일: {chosen_style}")
-
-                diary_text = await generate_diary_entry(conversation_log, style=chosen_style)
-                emotion = await detect_emotion(diary_text)
-                await upload_to_notion(diary_text, emotion_key=emotion)
-                logging.info("[SCHEDULER] 자동 일기 업로드 완료")
-        except Exception as e:
-            logging.error(f"[ERROR] 일기 업로드 중 오류: {repr(e)}")
-
-    async def send_daily_observation():
-        try:
-            logging.debug("[SCHEDULER] 서영 관찰 기록 자동 생성 시작")
-            observation_text = await generate_observation_log(conversation_log)
-            await upload_observation_to_notion(observation_text)
-            logging.info("[SCHEDULER] 관찰 기록 업로드 완료")
-        except Exception as e:
-            logging.error(f"[ERROR] 관찰 기록 업로드 중 오류: {repr(e)}")
-
-    scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
-    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
-    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("lunch")), CronTrigger(hour=12, minute=0))
-    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("evening")), CronTrigger(hour=18, minute=0))
-    scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("night")), CronTrigger(hour=23, minute=0))
-    scheduler.add_job(lambda: asyncio.create_task(send_daily_summary()), CronTrigger(hour=2, minute=0))
-    scheduler.add_job(lambda: asyncio.create_task(send_daily_observation()), CronTrigger(hour=2, minute=5))
-
-    scheduler.start()
+    try:
+        result = response.json()["results"][0]
+        return datetime.fromisoformat(result["properties"]["날짜"]["date"]["start"])
+    except Exception:
+        return datetime.now() - timedelta(days=1)
 
 async def fetch_recent_notion_summary():
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
