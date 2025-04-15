@@ -3,9 +3,10 @@ import discord
 import asyncio
 from dotenv import load_dotenv
 from kiyo_brain import (
-    generate_kiyo_message, summarize_conversation,
+    generate_kiyo_message,
     generate_morning_greeting, generate_lunch_checkin,
-    generate_evening_checkin, generate_night_checkin
+    generate_evening_checkin, generate_night_checkin,
+    generate_diary_and_image
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
 from scheduler import setup_scheduler
@@ -53,11 +54,6 @@ async def on_message(message):
     conversation_log.append(("キヨ", response))
     await message.channel.send(response)
 
-    if len(conversation_log) >= 6:
-        summary = await summarize_conversation(conversation_log)
-        await upload_to_notion(summary)
-        conversation_log.clear()
-
 async def send_greeting_with_prompt(prompt_func):
     for guild in client.guilds:
         for member in guild.members:
@@ -86,8 +82,7 @@ async def send_night_checkin():
 
 async def send_daily_summary():
     if conversation_log:
-        summary = await summarize_conversation(conversation_log)
-        await upload_to_notion(summary)
+        await generate_diary_and_image(conversation_log)
         conversation_log.clear()
 
 async def start_discord_bot():
