@@ -9,6 +9,7 @@ from kiyo_brain import (
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
 import logging
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -68,11 +69,28 @@ async def on_message(message):
         if not conversation_log:
             await message.channel.send("크크… 아직 나눈 이야기가 없네.")
             return
-        last_user_msg = conversation_log[-2][1] if len(conversation_log) >= 2 else message.content
-        last_kiyo_response = conversation_log[-1][1] if conversation_log[-1][0] == "キヨ" else ""
-        emotion = await detect_emotion(last_user_msg)
+
+        now = datetime.now()
+        since = now - timedelta(days=1)
+
+        last_kiyo_response = ""
+        last_user_input = ""
+
+        for i in reversed(range(len(conversation_log))):
+            speaker, text = conversation_log[i]
+            if speaker == "キヨ":
+                last_kiyo_response = text
+                if i > 0 and conversation_log[i - 1][0] != "キヨ":
+                    last_user_input = conversation_log[i - 1][1]
+                break
+
+        if not last_kiyo_response:
+            await message.channel.send("크크… 아직 기록할 대답이 없네.")
+            return
+
+        emotion = await detect_emotion(last_user_input or last_kiyo_response)
         await upload_to_notion(last_kiyo_response, emotion=emotion)
-        await message.channel.send("방금 대화를 일기로 남겼어. 크크…")
+        await message.channel.send("방금까지의 대화를 일기로 남겼어. 크크…")
         return
 
     if not message.content.strip():
