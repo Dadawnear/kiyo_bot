@@ -18,6 +18,7 @@ USER_DISCORD_NAME = os.getenv("USER_DISCORD_NAME")
 
 intents = discord.Intents.default()
 intents.messages = True
+intents.message_content = True  # ✅ 메시지 내용 접근을 위해 꼭 필요함
 intents.guilds = True
 intents.members = True
 intents.dm_messages = True
