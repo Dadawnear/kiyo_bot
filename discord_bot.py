@@ -4,7 +4,8 @@ import asyncio
 from dotenv import load_dotenv
 from kiyo_brain import (
     generate_kiyo_message,
-    generate_diary_and_image
+    generate_diary_and_image,
+    detect_emotion
 )
 from notion_utils import upload_to_notion, fetch_recent_notion_summary
 import logging
@@ -31,8 +32,6 @@ def is_target_user(message):
 @client.event
 async def on_ready():
     print(f"[READY] Logged in as {client.user}")
-
-    # ✅ scheduler는 on_ready 안에서 import되도록 (순환 참조 방지)
     try:
         from scheduler import setup_scheduler
         setup_scheduler(client, conversation_log)
@@ -44,11 +43,9 @@ async def on_message(message):
     logging.debug(f"[DEBUG] author: {message.author}, content: {message.content}")
 
     if message.author == client.user:
-        logging.debug("[DEBUG] 봇 자신의 메시지라 무시")
         return
 
     if not is_target_user(message):
-        logging.debug("[DEBUG] 타겟 유저가 아님")
         return
 
     if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
@@ -67,16 +64,24 @@ async def on_message(message):
         conversation_log.clear()
         return
 
+    if message.content.strip().startswith("!diary"):
+        if not conversation_log:
+            await message.channel.send("크크… 아직 나눈 이야기가 없네.")
+            return
+        last_user_msg = conversation_log[-2][1] if len(conversation_log) >= 2 else message.content
+        last_kiyo_response = conversation_log[-1][1] if conversation_log[-1][0] == "キヨ" else ""
+        emotion = await detect_emotion(last_user_msg)
+        await upload_to_notion(last_kiyo_response, emotion=emotion)
+        await message.channel.send("방금 대화를 일기로 남겼어. 크크…")
+        return
+
     if not message.content.strip():
-        logging.debug("[DEBUG] 빈 메시지, 처리하지 않음.")
         return
 
     conversation_log.append(("정서영", message.content))
 
     try:
-        logging.debug("[DEBUG] generate_kiyo_message 호출 전")
         response = await generate_kiyo_message(conversation_log)
-        logging.debug(f"[DEBUG] 생성된 응답: {response}")
         conversation_log.append(("キヨ", response))
         await message.channel.send(response)
     except Exception as e:
