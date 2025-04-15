@@ -14,10 +14,22 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-async def upload_diary_entry_with_image(text, image_url, tags=[]):
+EMOTION_TAGS = {
+    "슬픔": ["우울", "쓸쓸함"],
+    "분노": ["화남"],
+    "혼란": ["혼란"],
+    "애정": ["애정", "연애"],
+    "무심": ["무기력"],
+    "혐오": ["혐오"],
+    "자괴감": ["자기혐오"],
+    "중립": ["관찰"]
+}
+
+async def upload_diary_entry_with_image(text, image_url, emotion="중립"):
     today = datetime.now()
     date_str = today.strftime("%Y년 %m월 %d일 일기")
     iso_date = today.strftime("%Y-%m-%d")
+    tags = EMOTION_TAGS.get(emotion, ["기록"])
 
     url = "https://api.notion.com/v1/pages"
     data = {
@@ -110,5 +122,5 @@ async def fetch_recent_notion_summary():
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
 # 일반 텍스트만 추가할 경우에도 쓸 수 있는 버전
-async def upload_to_notion(text):
-    await upload_diary_entry_with_image(text, image_url="https://via.placeholder.com/1", tags=[])
+async def upload_to_notion(text, emotion="중립"):
+    await upload_diary_entry_with_image(text, image_url="https://via.placeholder.com/1", emotion=emotion)
