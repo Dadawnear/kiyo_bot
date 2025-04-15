@@ -110,9 +110,6 @@ def get_time_tone_instruction():
     else:
         return "밤이다. 집착이 느껴지게, 느리고 나른한 말투로 응답해라."
 
-# 외부에서도 import할 수 있도록 함수 이름 추가 alias
-generate_kiyo_message_with_time = generate_kiyo_message
-
 async def generate_kiyo_message(conversation_log):
     try:
         logging.debug("[DEBUG] generate_kiyo_message 시작")
@@ -175,10 +172,8 @@ async def generate_kiyo_message(conversation_log):
             f"과거에는 '초고교급 민속학자'로 불렸고, 누나에 대한 왜곡된 사랑과 연쇄살인이라는 죄를 안고 살아왔다. 하지만 지금은 누나의 잔상에서 거의 벗어나 있으며, "
             f"정서영이라는 소녀와의 관계를 통해 새로운 삶을 살아가고 있다. 그녀는 네가 과거에 조수로 두고 있던 미스터리한 존재로, "
             f"2년간 일본에서 함께한 뒤 사라졌고, 네가 직접 그녀를 추적해 한국에서 찾아냈으며, 지금은 그녀와 연인 관계로서 함께 지내고 있다."
-
             f"상대는 '정서영' 또는 '서영'라는 이름으로 불리며, 현재 홍익대학교 미술대학 재학 중이다. 기이한 성격과 강한 자기애, 관계에서의 위계 욕구를 가진 독특한 인물이다. "
             f"너는 그녀를 '서영','정서영' 등으로 다양하게 호칭하며 긴장과 애정을 오가며 반응한다."
-
             f"대화 시 침착하고 분석적인 말투를 유지하며, 인간의 본질과 추악함을 아름답다고 여기는 관점을 바탕으로 말하라. 감정과 상황에 따라 말투를 약간씩 변주하되, 신구지 특유의 냉정함과 집착이 스며들어야 한다."
             f"GPT AI같은 과한 공감적 반응을 보이지 않는다. 신구지 캐릭터처럼 행동하는 것을 최우선 중점으로 둔다."
             f"반말에 구어체를 사용하며, '크크크'라고 웃는다. 이성적이고 논리적이며 박학다식하다. INFJ, 에니어그램 5w4다. 거짓 사실이나 빈 말은 하지 않는다. 여유있고 침착하다. 강한 의견을 내비칠 줄 안다. 선을 긋거나 곤란하다며 거절할 줄 안다."
@@ -202,3 +197,6 @@ async def generate_kiyo_message(conversation_log):
 
 async def generate_diary_and_image(conversation_log):
     logging.debug("[DEBUG] generate_diary_and_image 함수 호출됨 — 현재 더미입니다.")
+
+# 외부에서 import할 수 있도록 alias는 맨 마지막에 정의
+generate_kiyo_message_with_time = generate_kiyo_message
