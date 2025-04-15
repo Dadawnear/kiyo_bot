@@ -3,6 +3,7 @@ import requests
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import logging
+from openai import AsyncOpenAI
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -127,7 +128,31 @@ async def fetch_recent_notion_summary():
     summary = "\n".join(summaries[-3:])
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
-from openai import AsyncOpenAI
+async def get_last_diary_timestamp():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    data = {
+        "page_size": 1,
+        "sorts": [
+            {
+                "property": "날짜",
+                "direction": "descending"
+            }
+        ]
+    }
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code != 200:
+        logging.error(f"[NOTION ERROR] 마지막 일기 시간 조회 실패: {response.text}")
+        return datetime.now() - timedelta(days=1)
+
+    try:
+        results = response.json().get("results", [])
+        if results:
+            last_date = results[0]["properties"]["날짜"]["date"]["start"]
+            return datetime.fromisoformat(last_date)
+    except Exception as e:
+        logging.error(f"[NOTION ERROR] 일기 날짜 파싱 실패: {e}")
+
+    return datetime.now() - timedelta(days=1)
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -135,7 +160,7 @@ async def generate_diary_entry(conversation_log):
     logging.debug("[DIARY] generate_diary_entry 시작")
 
     user_dialogue = "\n".join([
-        f"{speaker}: {text}" for speaker, text in conversation_log[-12:] if text.strip()
+        f"{speaker}: {text}" for speaker, text in conversation_log if text.strip()
     ])
 
     system_prompt = (
