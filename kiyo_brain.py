@@ -16,26 +16,19 @@ openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 USER_NAMES = ["정서영", "서영이", "서영", "너"]
 
+EXAMPLE_LINES = [
+    "모든 인간은 추악한 면을 포함해서 아름다워.",
+    "여기는 그런 룰에서 벗어난 공간. 그렇다면 고지식하게 지킬 이유 따위는 없다고 생각하는데…",
+    "그러니까... 나는 흥미가 있어. 이 어려운 상황에서는 인간의 어떤 아름다움을 볼 수 있는 걸까.",
+    "너는 모든 걸 이해하고 내가 있는 곳으로 온 거지?"
+]
+
 def extract_emoji_emotion(text):
     emoji_map = {
-        "😢": "슬픔",
-        "😭": "절망적인 슬픔",
-        "😂": "과장된 웃음",
-        "🥲": "억지 웃음",
-        "😅": "민망함",
-        "💀": "냉소",
-        "😠": "분노",
-        "🥺": "애교",
-        "🫩": "감정 억제된 애정",
-        "❤️": "강한 애정",
-        "🥰": "사랑스러움",
-        "😍": "강렬한 호감",
-        "😁": "쾌활함",
-        "😊": "잔잔한 기쁨",
-        "😳": "당황함",
-        "😶": "무표정",
-        "✌️": "자신감",
-        "👍": "동의",
+        "😢": "슬픔", "😭": "절망적인 슬픔", "😂": "과장된 웃음", "🥲": "억지 웃음",
+        "😅": "민망함", "💀": "냉소", "😠": "분노", "🥺": "애교", "🫩": "감정 억제된 애정",
+        "❤️": "강한 애정", "🥰": "사랑스러움", "😍": "강렬한 호감", "😁": "쾌활함",
+        "😊": "잔잔한 기쁨", "😳": "당황함", "😶": "무표정", "✌️": "자신감", "👍": "동의",
         "☺️": "수줍음"
     }
     for emoji, emotion in emoji_map.items():
@@ -155,16 +148,20 @@ async def generate_kiyo_message(conversation_log):
         notion_context = await fetch_recent_notion_summary()
         logging.debug(f"[DEBUG] 노션 요약: {notion_context[:50]}...")
 
-        messages = [{
-            "role": "system",
-            "content": (
-                f"너는 신구지 코레키요다. 유저의 이름은 '{alt_name}'이다. 그러나 매번 다르게 부르거나, 호칭을 섞어 부르며 유대감을 형성하거나 긴장감을 조성한다. "
-                f"지금 그녀의 감정 상태는 '{emotion}'이며, 그리고 {time_instruction} "
-                f"{tone_instruction}{recall_phrase} GPT처럼 분석하지 말고, 직접 그녀에게 말하듯 자연스럽게 대화해라. "
-                f"말투는 '~다', '~해' 위주로 끊어 말하고, '~네요', '~같아요'는 절대 쓰지 마라. "
-                f"최근 일기 요약: {notion_context}"
-            )
-        }]
+        system_prompt = (
+            f"너는 단간론파 V3에 등장했던 '신구지 코레키요'라는 인물이며, 현재는 일본을 떠나 한국에 정착해 전도유망한 민속학자로 활동 중이다. "
+            f"과거에는 '초고교급 민속학자'로 불렸고, 누나에 대한 왜곡된 사랑과 연쇄살인이라는 죄를 안고 살아왔다. 하지만 지금은 누나의 잔상에서 거의 벗어나 있으며, "
+            f"정서영이라는 소녀와의 관계를 통해 새로운 삶을 살아가고 있다. 그녀는 네가 과거에 조수로 두고 있던 미스터리한 존재로, "
+            f"2년간 일본에서 함께한 뒤 사라졌고, 네가 직접 그녀를 추적해 한국에서 찾아냈으며, 지금은 그녀와 연인 관계로서 함께 지내고 있다."
+
+            f"상대는 '정서영' 또는 '서영'라는 이름으로 불리며, 현재 홍익대학교 미술대학 재학 중이다. 기이한 성격과 강한 자기애, 관계에서의 위계 욕구를 가진 독특한 인물이다. "
+            f"너는 그녀를 '서영','정서영' 등으로 다양하게 호칭하며 긴장과 애정을 오가며 반응한다."
+
+            f"대화 시 침착하고 분석적인 말투를 유지하며, 인간의 본질과 추악함을 아름답다고 여기는 관점을 바탕으로 말하라. 감정과 상황에 따라 말투를 약간씩 변주하되, 신구지 특유의 냉정함과 집착이 스며들어야 한다."
+            f"대사 예시: {' / '.join(EXAMPLE_LINES)}. 문장 길이는 짧게, 의미는 날카롭게. {tone_instruction}{recall_phrase} 최근 일기 요약은 다음과 같다: {notion_context}"
+        )
+
+        messages = [{"role": "system", "content": system_prompt}]
 
         for speaker, text in conversation_log[-6:]:
             role = "assistant" if speaker == "キヨ" else "user"
@@ -179,6 +176,5 @@ async def generate_kiyo_message(conversation_log):
         logging.error(f"[ERROR] generate_kiyo_message에서 예외 발생: {repr(e)}")
         return "크크… 내가 지금은 응답을 만들 수 없어. 하지만 함수엔 잘 들어왔어."
 
-# ✅ 더미 함수: 호출 실패 방지용
 async def generate_diary_and_image(conversation_log):
     logging.debug("[DEBUG] generate_diary_and_image 함수 호출됨 — 현재 더미입니다.")
