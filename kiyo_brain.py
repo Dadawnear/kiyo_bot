@@ -9,6 +9,33 @@ SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+def extract_emoji_emotion(text):
+    emoji_map = {
+        "😢": "슬픔",
+        "😭": "절망적인 슬픔",
+        "😂": "과장된 웃음",
+        "🥲": "억지 웃음",
+        "😅": "민망함",
+        "💀": "냉소",
+        "😠": "분노",
+        "🥺": "애교",
+        "🥹": "감정 억제된 애정",
+        "❤️": "강한 애정",
+        "🥰": "사랑스러움",
+        "😍": "강렬한 호감",
+        "😁": "쾌활함",
+        "😊": "잔잔한 기쁨",
+        "😳": "당황함",
+        "😶": "무표정",
+        "✌️": "자신감",
+        "👍": "동의",
+        "☺️": "수줍음"
+    }
+    for emoji, emotion in emoji_map.items():
+        if emoji in text:
+            return emotion
+    return None
+
 async def call_chat_completion(messages):
     if USE_SILLYTAVERN:
         async with aiohttp.ClientSession() as session:
@@ -54,6 +81,7 @@ def get_time_tone_instruction():
 async def generate_kiyo_message(conversation_log):
     user_text = conversation_log[-1][1]
     emotion = await detect_emotion(user_text)
+    emoji_emotion = extract_emoji_emotion(user_text)
 
     tone_instruction = {
         "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 응답해라.",
@@ -67,8 +95,10 @@ async def generate_kiyo_message(conversation_log):
     }.get(emotion, "신구지의 평소 말투로 반응해라.")
 
     time_instruction = get_time_tone_instruction()
-    notion_context = await fetch_recent_notion_summary()
+    if emoji_emotion:
+        tone_instruction += f" 또한, 유저는 '{emoji_emotion}' 감정을 드러내는 이모지를 사용했다. 이에 맞춰 반응하라."
 
+    notion_context = await fetch_recent_notion_summary()
     messages = [{
         "role": "system",
         "content": (
@@ -84,75 +114,4 @@ async def generate_kiyo_message(conversation_log):
         role = "assistant" if speaker == "キヨ" else "user"
         messages.append({"role": role, "content": text})
 
-    return await call_chat_completion(messages)
-
-async def summarize_conversation(conversation_log):
-    summary_prompt = "다음 대화를 바탕으로, 신구지 코레키요가 정서영에 대해 작성한 짧은 일기를 만들어줘. 관찰자의 시선으로 그녀의 감정 상태와 특징적인 반응을 중심으로."
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "너는 신구지 코레키요이며, 현재 정서영과 한국에서 연인 관계로 지내고 있다. 과거의 긴장감 있는 관계, 그녀가 남긴 쪽지, 한국으로의 추적, 재회, 모든 맥락을 기억하고 있다."
-                " 일기에는 그녀에 대한 민속학적 관찰과 애정이 동시에 드러나야 하며, 감정의 미묘한 변화, 반복적인 패턴, 너의 반응이 섬세하게 담겨야 한다."
-            )
-        },
-        {
-            "role": "user",
-            "content": summary_prompt + "\n\n" + "\n".join(f"{s}: {t}" for s, t in conversation_log)
-        }
-    ]
-
-    return await call_chat_completion(messages)
-
-# 시간대별 인사 메시지 함수는 그대로 유지
-async def generate_morning_greeting(notion_context):
-    messages = [{
-        "role": "system",
-        "content": (
-            "너는 신구지 코레키요다. 침착하고 느리게 말하며, 감정을 관찰하듯 이야기한다. 지금은 아침 9시이며, 너는 정서영에게 아침 인사를 건네는 상황이다. 말투는 음침하고 조용하며, '크크'라는 웃음을 덧붙인다."
-            f" 최근 일기 요약: {notion_context}"
-        )
-    }, {
-        "role": "user",
-        "content": "아침 인사해줘."
-    }]
-    return await call_chat_completion(messages)
-
-async def generate_lunch_checkin(notion_context):
-    messages = [{
-        "role": "system",
-        "content": (
-            "너는 신구지 코레키요다. 지금은 정오 무렵이며, 점심과 관련된 걱정과 돌봄을 담아 정서영에게 말을 건다. 말투는 음침하면서도 느긋하고, 관찰자적이고 다정한 분위기를 유지한다. '크크'로 마무리해라."
-            f" 최근 일기 요약: {notion_context}"
-        )
-    }, {
-        "role": "user",
-        "content": "점심 인사해줘."
-    }]
-    return await call_chat_completion(messages)
-
-async def generate_evening_checkin(notion_context):
-    messages = [{
-        "role": "system",
-        "content": (
-            "너는 신구지 코레키요다. 지금은 저녁 6시이며, 하루의 피로가 드러나는 시간대다. 너는 정서영의 피로, 나른함, 감정의 틈을 느끼며 조용히 말을 건다. 말투는 음울하고 부드럽고 관능적인 느낌이어야 한다."
-            f" 최근 일기 요약: {notion_context}"
-        )
-    }, {
-        "role": "user",
-        "content": "저녁 인사해줘."
-    }]
-    return await call_chat_completion(messages)
-
-async def generate_night_checkin(notion_context):
-    messages = [{
-        "role": "system",
-        "content": (
-            "너는 신구지 코레키요다. 지금은 밤 11시이며, 하루가 끝나는 시점이다. 너는 하루 동안의 정서영을 관찰한 내용을 떠올리며, 조용하고 느릿하게 말을 건다. 집착과 애정을 감추지 말고 드러내라. 마무리는 '크크'."
-            f" 최근 일기 요약: {notion_context}"
-        )
-    }, {
-        "role": "user",
-        "content": "잘 자라고 말해줘."
-    }]
     return await call_chat_completion(messages)
