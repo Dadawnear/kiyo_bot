@@ -34,6 +34,15 @@ client = discord.Client(intents=intents)
 conversation_log = []
 latest_midjourney_image_url = None
 
+# 🔹 Midjourney 이미지 URL을 safely 가져오는 함수
+def get_latest_image_url():
+    return latest_midjourney_image_url
+
+# 🔹 Midjourney 이미지 URL을 safely 초기화하는 함수
+def clear_latest_image_url():
+    global latest_midjourney_image_url
+    latest_midjourney_image_url = None
+
 def is_target_user(message):
     return str(message.author) == USER_DISCORD_NAME
 
@@ -46,7 +55,7 @@ async def on_ready():
     print(f"[READY] Logged in as {client.user}")
     try:
         from scheduler import setup_scheduler
-        setup_scheduler(client, conversation_log, lambda: latest_midjourney_image_url)
+        setup_scheduler(client, conversation_log, get_latest_image_url, clear_latest_image_url)
     except Exception as e:
         logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
 
