@@ -222,8 +222,32 @@ async def generate_kiyo_message(conversation_log):
         logging.error(f"[ERROR] generate_kiyo_message에서 예외 발생: {repr(e)}")
         return "크크… 내가 지금은 응답을 만들 수 없어. 하지만 함수엔 잘 들어왔어."
 
-async def generate_diary_and_image(conversation_log):
-    logging.debug("[DEBUG] generate_diary_and_image 함수 호출됨 — 현재 더미입니다.")
+async def generate_image_prompt(diary_text):
+    messages = [
+        {"role": "system", "content": (
+            "다음은 신구지 코레키요가 쓴 일기야. 이걸 바탕으로 신구지가 직접 찍은 시네마틱 사진을 묘사해줘. "
+            "형식은 'A cinematic photo of ...'로 시작해야 하고, 사람 얼굴은 절대 없어야 해.")},
+        {"role": "user", "content": diary_text}
+    ]
+    response = await openai_client.chat.completions.create(model="gpt-4o", messages=messages)
+    return response.choices[0].message.content.strip()
+
+async def generate_diary_and_image(conversation_log, style="full_diary"):
+    try:
+        logging.debug("[DIARY+IMG] 통합 일기 생성 시작")
+        diary_text = await generate_diary_entry(conversation_log, style=style)
+        emotion = await detect_emotion(diary_text)
+        image_prompt = await generate_image_prompt(diary_text)
+        image_response = await openai_client.images.generate(
+            model="dall-e-3", prompt=image_prompt, size="1024x1024", quality="standard", n=1
+        )
+        image_url = image_response.data[0].url
+        await upload_to_notion(diary_text, emotion_key=emotion, image_url=image_url)
+        logging.info("[DIARY+IMG] 일기와 이미지 업로드 완료")
+        return diary_text, image_url
+    except Exception as e:
+        logging.error(f"[ERROR] generate_diary_and_image 실패: {repr(e)}")
+        return None, None
 
 # 외부에서 import할 수 있도록 alias는 맨 마지막에 정의
 generate_kiyo_message_with_time = generate_kiyo_message
