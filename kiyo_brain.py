@@ -1,6 +1,7 @@
 import os
 import aiohttp
 import logging
+import discord
 from openai import AsyncOpenAI
 from datetime import datetime
 from midjourney_utils import send_midjourney_prompt
