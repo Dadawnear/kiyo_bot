@@ -222,6 +222,10 @@ async def upload_to_notion(text, emotion_key="기록", image_url=None):
 
     data = {
         "parent": { "database_id": NOTION_DATABASE_ID },
+        "cover": {
+            "type": "external",
+            "external": { "url": image_url }
+        } if image_url else None,
         "properties": {
             "Name": { "title": [{"text": {"content": date_str}}] },
             "날짜": { "date": { "start": iso_date }},
@@ -230,12 +234,14 @@ async def upload_to_notion(text, emotion_key="기록", image_url=None):
         "children": blocks
     }
 
-    response = requests.post(url, headers=HEADERS, json=data)
-    result = response.json() if response.status_code == 200 else {}
-    if response.status_code != 200:
-        logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
-    else:
-        logging.info(f"[NOTION] 업로드 성공: {result.get('id')}")
+    try:
+        response = requests.post("https://api.notion.com/v1/pages", headers=HEADERS, json=data)
+        if response.status_code != 200:
+            logging.error(f"[NOTION ERROR] {response.status_code} - {response.text}")
+        else:
+            logging.info(f"[NOTION] 업로드 성공 (커버 포함): {response.json().get('id')}")
+    except Exception as e:
+        logging.error(f"[NOTION ERROR] 업로드 실패: {e}")
 
 # ✅ 누락된 함수 추가
 def get_last_diary_timestamp():
