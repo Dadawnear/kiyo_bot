@@ -72,7 +72,7 @@ async def on_message(message):
             match = re.search(r"!diary\s+(\w+)", message.content)
             style = match.group(1) if match else "full_diary"
 
-            last_diary_time = await get_last_diary_timestamp()
+            last_diary_time = get_last_diary_timestamp()
             if last_diary_time and last_diary_time.tzinfo is None:
                 last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
 
