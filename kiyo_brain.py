@@ -105,6 +105,41 @@ async def generate_kiyo_memory_summary(text):
     result = await call_chat_completion(messages)
     return result
 
+async def fetch_recent_observation_entries(limit=10):
+    url = f"https://api.notion.com/v1/databases/{NOTION_OBSERVATION_DB_ID}/query"
+    data = {
+        "page_size": limit,
+        "sorts": [{"property": "날짜", "direction": "descending"}]
+    }
+
+    try:
+        response = requests.post(url, headers=HEADERS, json=data)
+        if response.status_code != 200:
+            logging.error(f"[NOTION OBS FETCH ERROR] {response.status_code} - {response.text}")
+            return "최근 관찰 기록을 불러올 수 없습니다."
+
+        pages = response.json().get("results", [])
+        observations = []
+
+        for page in pages:
+            page_id = page["id"]
+            block_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
+            block_resp = requests.get(block_url, headers=HEADERS)
+            if block_resp.status_code != 200:
+                continue
+            children = block_resp.json().get("results", [])
+            for child in children:
+                if child["type"] == "paragraph":
+                    texts = child["paragraph"].get("rich_text", [])
+                    for t in texts:
+                        if t["type"] == "text":
+                            observations.append(t["text"]["content"])
+
+        return "\\n".join(observations[-limit:])
+    except Exception as e:
+        logging.error(f"[NOTION OBS FETCH ERROR] {repr(e)}")
+        return "관찰 기록을 불러오는 중 오류가 발생했어."
+
 async def generate_kiyo_message(conversation_log):
     try:
         logging.debug("[DEBUG] generate_kiyo_message 시작")
