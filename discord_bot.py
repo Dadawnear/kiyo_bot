@@ -38,7 +38,7 @@ def is_target_user(message):
     return str(message.author) == USER_DISCORD_NAME
 
 def extract_image_url(text):
-    match = re.search(r"(https://cdn\.discordapp\.com/attachments/[^\s]+\.(?:png|jpg|jpeg))", text)
+    match = re.search(r"(https://cdn\\.discordapp\\.com/attachments/[^\\s]+\\.(?:png|jpg|jpeg))", text)
     return match.group(1) if match else None
 
 @client.event
@@ -48,7 +48,7 @@ async def on_ready():
         from scheduler import setup_scheduler
         setup_scheduler(client, conversation_log)
     except Exception as e:
-        logging.error(f"[ERROR] 스컸질러 설정 중 오류: {repr(e)}")
+        logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
 
 @client.event
 async def on_message(message):
@@ -59,7 +59,6 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    # Midjourney 이미지 감지
     if message.channel.name == MIDJOURNEY_CHANNEL_NAME and message.author.bot:
         url = extract_image_url(message.content)
         if url:
@@ -67,7 +66,6 @@ async def on_message(message):
             logging.info(f"[MJ] Midjourney 이미지 URL 저장됨: {url}")
         return
 
-    # 사용자 메시지 감지
     if not is_target_user(message):
         return
 
@@ -100,14 +98,14 @@ async def on_message(message):
             filtered_log = [(speaker, text) for speaker, text in conversation_log]
 
             diary_text, _ = await generate_diary_and_image(
-                filtered_log, client, style=style
+                filtered_log, client, style=style, latest_image_url=latest_midjourney_image_url
             )
 
             if diary_text:
                 emotion = await detect_emotion(diary_text)
                 await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_midjourney_image_url)
                 await message.channel.send(f"스타일: `{style}` | 감정: `{emotion}` — 일기와 사진을 남겼어. 크크…")
-                latest_midjourney_image_url = None  # 초기화
+                latest_midjourney_image_url = None
             else:
                 await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아.")
         except Exception as e:
