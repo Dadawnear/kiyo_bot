@@ -26,7 +26,7 @@ def setup_scheduler(client, conversation_log):
         except Exception as e:
             logging.error(f"[ERROR] scheduled message error: {repr(e)}")
 
-    async def send_daily_summary():
+        async def send_daily_summary():
         try:
             logging.debug("[SCHEDULER] 일기 자동 생성 시작")
             if conversation_log:
@@ -35,12 +35,14 @@ def setup_scheduler(client, conversation_log):
                 logging.debug(f"[SCHEDULER] 선택된 일기 스타일: {chosen_style}")
 
                 diary_text = await generate_diary_entry(conversation_log, style=chosen_style)
+                logging.debug("[SCHEDULER] 일기 생성 완료")
+
                 emotion = await detect_emotion(diary_text)
-
                 logging.debug(f"[SCHEDULER] 감정 감지 결과: {emotion}")
-                await upload_to_notion(diary_text, emotion_key=emotion)
 
+                await upload_to_notion(diary_text, emotion_key=emotion)
                 logging.info("[SCHEDULER] 자동 일기 업로드 완료")
+
                 conversation_log.clear()
         except Exception as e:
             logging.error(f"[ERROR] 일기 업로드 중 오류: {repr(e)}")
