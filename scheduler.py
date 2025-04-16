@@ -7,9 +7,14 @@ import discord
 import random
 
 from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image
+from notion_utils import detect_emotion, upload_to_notion
+
+# 전역 이미지 URL 변수
+latest_midjourney_image_url = None
 
 # 스케줄러가 client와 conversation_log를 인자로 받아야 순환참조 피할 수 있음
 def setup_scheduler(client, conversation_log):
+    global latest_midjourney_image_url
 
     async def send_kiyo_message(time_context):
         try:
@@ -26,6 +31,7 @@ def setup_scheduler(client, conversation_log):
             logging.error(f"[ERROR] scheduled message error: {repr(e)}")
 
     async def send_daily_summary():
+        global latest_midjourney_image_url
         try:
             logging.debug("[SCHEDULER] 일기 자동 생성 시작")
             if conversation_log:
@@ -33,9 +39,12 @@ def setup_scheduler(client, conversation_log):
                 chosen_style = random.choice(styles)
                 logging.debug(f"[SCHEDULER] 선택된 일기 스타일: {chosen_style}")
 
-                diary_text, image_url = await generate_diary_and_image(conversation_log, client=client, style=chosen_style)
+                diary_text, _ = await generate_diary_and_image(conversation_log, client, style=chosen_style)
                 if diary_text:
-                    logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {image_url if image_url else '없음'}")
+                    emotion = await detect_emotion(diary_text)
+                    await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_midjourney_image_url)
+                    logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {latest_midjourney_image_url}")
+                    latest_midjourney_image_url = None  # 초기화
                 else:
                     logging.warning("[SCHEDULER] 일기 생성 실패")
 
