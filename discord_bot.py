@@ -46,7 +46,7 @@ async def on_ready():
     print(f"[READY] Logged in as {client.user}")
     try:
         from scheduler import setup_scheduler
-        setup_scheduler(client, conversation_log)
+        setup_scheduler(client, conversation_log, lambda: latest_midjourney_image_url)
     except Exception as e:
         logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
 
