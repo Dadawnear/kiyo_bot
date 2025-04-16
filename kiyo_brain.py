@@ -149,6 +149,10 @@ async def generate_kiyo_message(conversation_log):
         from notion_utils import detect_emotion
         emotion = await detect_emotion(user_text)
         logging.debug(f"[DEBUG] 감정 분석 결과: {emotion}")
+        
+        memory_context = await fetch_recent_memories(limit=5)
+        memory_summary = "\n".join(memory_context) if memory_context else "최근 기억 없음"
+        logging.debug(f"[MEMORY] 최근 기억 요약: {memory_summary}")
 
         emoji_emotion = extract_emoji_emotion(user_text)
         logging.debug(f"[DEBUG] 이모지 감정: {emoji_emotion}")
