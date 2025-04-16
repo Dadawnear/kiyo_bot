@@ -4,6 +4,7 @@ import logging
 from openai import AsyncOpenAI
 from datetime import datetime
 from notion_utils import fetch_recent_notion_summary
+from notion_utils import fetch_recent_memories
 import random
 import difflib
 
