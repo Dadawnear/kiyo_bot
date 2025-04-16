@@ -3,6 +3,7 @@ import aiohttp
 import logging
 from openai import AsyncOpenAI
 from datetime import datetime
+from midjourney_utils import send_midjourney_prompt
 from notion_utils import (
     fetch_recent_notion_summary,
     fetch_recent_memories,
@@ -243,18 +244,18 @@ async def generate_image_prompt(diary_text):
     response = await openai_client.chat.completions.create(model="gpt-4o", messages=messages)
     return response.choices[0].message.content.strip()
 
-async def generate_diary_and_image(conversation_log, style="full_diary"):
+async def generate_diary_and_image(conversation_log, client: discord.Client, style="full_diary"):
     try:
         logging.debug("[DIARY+IMG] 통합 일기 생성 시작")
         diary_text = await generate_diary_entry(conversation_log, style=style)
         emotion = await detect_emotion(diary_text)
         image_prompt = await generate_image_prompt(diary_text)
-        image_response = await openai_client.images.generate(
-            model="dall-e-3", prompt=image_prompt, size="1024x1024", quality="standard", n=1
-        )
-        image_url = image_response.data[0].url
-        await upload_to_notion(diary_text, emotion_key=emotion, image_url=image_url)
-        logging.info("[DIARY+IMG] 일기와 이미지 업로드 완료")
+        await send_midjourney_prompt(client, image_prompt)
+
+        # 노션에는 일단 이미지 없이 텍스트만 업로드
+        await upload_to_notion(diary_text, emotion_key=emotion, image_url=None)
+
+        image_url = None  # Midjourney 자동 업로드 시스템 연동 전까지는 None으로 반환
         return diary_text, image_url
     except Exception as e:
         logging.error(f"[ERROR] generate_diary_and_image 실패: {repr(e)}")
