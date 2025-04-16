@@ -26,7 +26,7 @@ def setup_scheduler(client, conversation_log):
         except Exception as e:
             logging.error(f"[ERROR] scheduled message error: {repr(e)}")
 
-        async def send_daily_summary():
+    async def send_daily_summary():
         try:
             logging.debug("[SCHEDULER] 일기 자동 생성 시작")
             if conversation_log:
@@ -46,6 +46,7 @@ def setup_scheduler(client, conversation_log):
                 conversation_log.clear()
         except Exception as e:
             logging.error(f"[ERROR] 일기 업로드 중 오류: {repr(e)}")
+
 
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
