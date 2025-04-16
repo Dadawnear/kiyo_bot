@@ -35,7 +35,7 @@ def setup_scheduler(client, conversation_log):
 
                 diary_text, image_url = await generate_diary_and_image(conversation_log, client=client, style=chosen_style)
                 if diary_text:
-                    logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {image_url}")
+                    logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {image_url if image_url else '없음'}")
                 else:
                     logging.warning("[SCHEDULER] 일기 생성 실패")
 
