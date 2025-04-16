@@ -187,6 +187,28 @@ async def fetch_recent_notion_summary():
     summary = "\n".join(summaries[-3:])
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
+async def fetch_recent_memories(limit=5):
+    url = f"https://api.notion.com/v1/databases/{os.getenv('NOTION_MEMORY_DB_ID')}/query"
+    data = {
+        "page_size": limit,
+        "sorts": [{"property": "날짜", "direction": "descending"}]
+    }
+    try:
+        response = requests.post(url, headers=HEADERS, json=data)
+        if response.status_code != 200:
+            logging.error(f"[NOTION MEMORY FETCH ERROR] {response.status_code} - {response.text}")
+            return []
+        pages = response.json().get("results", [])
+        summaries = []
+        for page in pages:
+            title_block = page["properties"].get("기억 내용", {}).get("title", [])
+            if title_block:
+                summaries.append(title_block[0]["text"]["content"])
+        return summaries
+    except Exception as e:
+        logging.error(f"[NOTION MEMORY FETCH ERROR] 예외 발생: {repr(e)}")
+        return []
+
 async def upload_to_notion(text, emotion_key="기록", image_url=None):
     diary_date = get_virtual_diary_date()
     date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
