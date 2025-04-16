@@ -38,7 +38,7 @@ def is_target_user(message):
     return str(message.author) == USER_DISCORD_NAME
 
 def extract_image_url(text):
-    match = re.search(r"(https://cdn\\.discordapp\\.com/attachments/[^\\s]+\\.(?:png|jpg|jpeg))", text)
+    match = re.search(r"(https://cdn\.discordapp\.com/attachments/[^\s]+\.(?:png|jpg|jpeg))", text)
     return match.group(1) if match else None
 
 @client.event
@@ -59,7 +59,11 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    if message.channel.name == MIDJOURNEY_CHANNEL_NAME and message.author.bot:
+    if (
+        isinstance(message.channel, discord.TextChannel) and
+        message.channel.name == MIDJOURNEY_CHANNEL_NAME and 
+        message.author.bot
+    ):
         url = extract_image_url(message.content)
         if url:
             latest_midjourney_image_url = url
