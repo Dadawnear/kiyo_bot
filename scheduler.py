@@ -10,7 +10,7 @@ from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image
 from notion_utils import detect_emotion, upload_to_notion
 
 # client, conversation_log, latest_image_getter를 받아서 스케줄러 초기화
-def setup_scheduler(client, conversation_log, latest_image_getter):
+def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_callback):
     async def send_kiyo_message(time_context):
         try:
             logging.debug(f"[SCHEDULER] {time_context} 시각 자동 메시지 전송 시작")
