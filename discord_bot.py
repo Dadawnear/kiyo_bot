@@ -68,16 +68,23 @@ async def on_message(message):
     if message.author == client.user:
         return
 
+    MIDJOURNEY_BOT_ID = os.getenv("MIDJOURNEY_BOT_ID")
+
     if (
         isinstance(message.channel, discord.TextChannel) and
         message.channel.name == MIDJOURNEY_CHANNEL_NAME and 
-        message.author.bot
+        str(message.author.id) == MIDJOURNEY_BOT_ID
     ):
-        url = extract_image_url(message.content)
-        if url:
-            latest_midjourney_image_url = url
-            logging.info(f"[MJ] Midjourney 이미지 URL 저장됨: {url}")
+        if message.attachments:
+            for attachment in message.attachments:
+                if attachment.url.endswith((".png", ".jpg", ".jpeg")):
+                    latest_midjourney_image_url = attachment.url
+                    logging.info(f"[MJ] Midjourney 이미지 URL 추출 완료: {latest_midjourney_image_url}")
+                    break
+        else:
+            logging.debug("[MJ] Midjourney 메시지에는 첨부 이미지가 없었음.")
         return
+
 
     if not is_target_user(message):
         return
