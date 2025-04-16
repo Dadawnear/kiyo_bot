@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timezone
 import logging
 from dotenv import load_dotenv
-from kiyo_brain import generate_kiyo_message, generate_kiyo_memory_summary
+from kiyo_brain import generate_kiyo_message, generate_kiyo_memory_summary, generate_diary_and_image
 from notion_utils import (
     generate_diary_entry,
     upload_to_notion,
