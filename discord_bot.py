@@ -10,9 +10,9 @@ from notion_utils import (
     generate_diary_entry,
     upload_to_notion,
     detect_emotion,
-    get_last_diary_timestamp,
     generate_observation_log,
-    upload_observation_to_notion
+    upload_observation_to_notion,
+    get_last_diary_timestamp  # ← 이 함수가 이제 정상 작동함
 )
 
 load_dotenv()
@@ -69,11 +69,11 @@ async def on_message(message):
             return
 
         try:
-            match = re.search(r"!diary\\s+(\\w+)", message.content)
+            match = re.search(r"!diary\s+(\w+)", message.content)
             style = match.group(1) if match else "full_diary"
 
             last_diary_time = await get_last_diary_timestamp()
-            if last_diary_time.tzinfo is None:
+            if last_diary_time and last_diary_time.tzinfo is None:
                 last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
 
             filtered_log = [(speaker, text) for speaker, text in conversation_log]
