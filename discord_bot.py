@@ -50,6 +50,28 @@ def extract_image_url(text):
     match = re.search(r"(https://cdn\.discordapp\.com/attachments/[^\s]+\.(?:png|jpg|jpeg))", text)
     return match.group(1) if match else None
 
+def extract_image_url_from_message(message):
+    # attachments 우선
+    for attachment in message.attachments:
+        if attachment.url.endswith((".png", ".jpg", ".jpeg")):
+            return attachment.url
+
+    # embeds에서 이미지 URL 추출
+    for embed in message.embeds:
+        if embed.type == "image" and embed.url:
+            return embed.url
+        if embed.thumbnail and embed.thumbnail.url:
+            return embed.thumbnail.url
+        if embed.image and embed.image.url:
+            return embed.image.url
+
+    return None
+
+def is_upscaled_image(message):
+    # Midjourney 업스케일 메시지인지 판단
+    upscale_keywords = ["Upscaled", "Image #", "U1", "U2", "U3", "U4"]
+    return any(keyword in message.content for keyword in upscale_keywords)
+
 @client.event
 async def on_ready():
     print(f"[READY] Logged in as {client.user}")
@@ -75,14 +97,17 @@ async def on_message(message):
         message.channel.name == MIDJOURNEY_CHANNEL_NAME and 
         str(message.author.id) == MIDJOURNEY_BOT_ID
     ):
-        if message.attachments:
-            for attachment in message.attachments:
-                if attachment.url.endswith((".png", ".jpg", ".jpeg")):
-                    latest_midjourney_image_url = attachment.url
-                    logging.info(f"[MJ] Midjourney 이미지 URL 추출 완료: {latest_midjourney_image_url}")
-                    break
+        image_url = extract_image_url_from_message(message)
+        # 🔸 업스케일 결과만 추적
+        if is_upscaled_image(message):
+            image_url = extract_image_url_from_message(message)
+            if image_url:
+                latest_midjourney_image_url = image_url
+                logging.info(f"[MJ] ✅ 업스케일 이미지 저장됨: {image_url}")
+            else:
+                logging.debug("[MJ] 업스케일 메시지에서 이미지 못 찾음.")
         else:
-            logging.debug("[MJ] Midjourney 메시지에는 첨부 이미지가 없었음.")
+            logging.debug("[MJ] ⛔ 업스케일 메시지 아님, 무시")
         return
 
 
