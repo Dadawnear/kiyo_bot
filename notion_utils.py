@@ -187,7 +187,6 @@ async def fetch_recent_notion_summary():
     summary = "\n".join(summaries[-3:])
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
-# ✅ 일기 업로드 함수 복구
 async def upload_to_notion(text, emotion_key="기록"):
     diary_date = get_virtual_diary_date()
     date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
@@ -229,3 +228,28 @@ async def upload_to_notion(text, emotion_key="기록"):
         logging.error(f"[NOTION ERROR] {response.status_code} - {result}")
     else:
         logging.info(f"[NOTION] 업로드 성공: {result.get('id')}")
+
+# ✅ 누락된 함수 추가
+def get_last_diary_timestamp():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    data = {
+        "page_size": 1,
+        "sorts": [{"property": "날짜", "direction": "descending"}]
+    }
+
+    response = requests.post(url, headers=HEADERS, json=data)
+    if response.status_code != 200:
+        logging.error(f"[NOTION ERROR] 최근 일기 타임스탬프 가져오기 실패: {response.text}")
+        return datetime.now(timezone.utc)
+
+    results = response.json().get("results", [])
+    if not results:
+        return datetime.now(timezone.utc)
+
+    try:
+        last_page = results[0]
+        last_date = last_page["properties"]["날짜"]["date"]["start"]
+        return datetime.fromisoformat(last_date)
+    except Exception as e:
+        logging.error(f"[NOTION ERROR] 타임스탬프 파싱 실패: {repr(e)}")
+        return datetime.now(timezone.utc)
