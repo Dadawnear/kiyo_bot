@@ -3,8 +3,14 @@ import aiohttp
 import logging
 from openai import AsyncOpenAI
 from datetime import datetime
-from notion_utils import fetch_recent_notion_summary
-from notion_utils import fetch_recent_memories
+from notion_utils import (
+    fetch_recent_notion_summary,
+    fetch_recent_memories,
+    generate_diary_entry,
+    detect_emotion,
+    upload_to_notion
+)
+
 import random
 import difflib
 
