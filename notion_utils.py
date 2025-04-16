@@ -187,22 +187,39 @@ async def fetch_recent_notion_summary():
     summary = "\n".join(summaries[-3:])
     return summary if summary else "최근 일기가 존재하지 않습니다."
 
-async def upload_to_notion(text, emotion_key="기록"):
+async def upload_to_notion(text, emotion_key="기록", image_url=None):
     diary_date = get_virtual_diary_date()
     date_str = diary_date.strftime("%Y년 %m월 %d일 일기")
     iso_date = diary_date.strftime("%Y-%m-%d")
     tags = EMOTION_TAGS.get(emotion_key, ["중립"])
-
     time_info = diary_date.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
-    meta_block = {
+
+    blocks = [{
         "object": "block",
         "type": "quote",
         "quote": {
             "rich_text": [{"type": "text", "text": {"content": f"🕰️ 작성 시간: {time_info}"}}]
         }
-    }
+    }]
 
-    url = "https://api.notion.com/v1/pages"
+    if image_url:
+        blocks.append({
+            "object": "block",
+            "type": "image",
+            "image": {
+                "type": "external",
+                "external": {"url": image_url}
+            }
+        })
+
+    blocks.append({
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+            "rich_text": [{"type": "text", "text": {"content": text}}]
+        }
+    })
+
     data = {
         "parent": { "database_id": NOTION_DATABASE_ID },
         "properties": {
@@ -210,16 +227,7 @@ async def upload_to_notion(text, emotion_key="기록"):
             "날짜": { "date": { "start": iso_date }},
             "태그": { "multi_select": [{"name": tag} for tag in tags] }
         },
-        "children": [
-            meta_block,
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
-            }
-        ]
+        "children": blocks
     }
 
     response = requests.post(url, headers=HEADERS, json=data)
