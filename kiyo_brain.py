@@ -244,7 +244,7 @@ async def generate_image_prompt(diary_text):
     response = await openai_client.chat.completions.create(model="gpt-4o", messages=messages)
     return response.choices[0].message.content.strip()
 
-async def generate_diary_and_image(conversation_log, client: discord.Client, style="full_diary"):
+async def generate_diary_and_image(conversation_log, client: discord.Client, style="full_diary", latest_image_url=None):
     try:
         logging.debug("[DIARY+IMG] 통합 일기 생성 시작")
         diary_text = await generate_diary_entry(conversation_log, style=style)
@@ -252,11 +252,8 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
         image_prompt = await generate_image_prompt(diary_text)
         await send_midjourney_prompt(client, image_prompt)
 
-        # 노션에는 일단 이미지 없이 텍스트만 업로드
-        await upload_to_notion(diary_text, emotion_key=emotion, image_url=None)
-
-        image_url = None  # Midjourney 자동 업로드 시스템 연동 전까지는 None으로 반환
-        return diary_text, image_url
+        await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_image_url)
+        return diary_text, latest_image_url
     except Exception as e:
         logging.error(f"[ERROR] generate_diary_and_image 실패: {repr(e)}")
         return None, None
