@@ -33,7 +33,7 @@ def setup_scheduler(client, conversation_log):
                 chosen_style = random.choice(styles)
                 logging.debug(f"[SCHEDULER] 선택된 일기 스타일: {chosen_style}")
 
-                diary_text, image_url = await generate_diary_and_image(conversation_log, style=chosen_style)
+                diary_text, image_url = await generate_diary_and_image(conversation_log, client=client, style=chosen_style)
                 if diary_text:
                     logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {image_url}")
                 else:
@@ -42,7 +42,6 @@ def setup_scheduler(client, conversation_log):
                 conversation_log.clear()
         except Exception as e:
             logging.error(f"[ERROR] 일기 업로드 중 오류: {repr(e)}")
-
 
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
