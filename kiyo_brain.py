@@ -95,6 +95,16 @@ def get_time_tone_instruction():
     else:
         return "밤이다. 집착이 느껴지게, 느리고 나른한 말투로 응답해라."
 
+async def generate_kiyo_memory_summary(text):
+    prompt = (
+        "너는 단간론파 V3의 신구지 코레키요다. 아래 문장을 읽고, 그 의미를 조용히 곱씹은 후 1문장으로 요약해라. "
+        "이 문장은 신구지가 서영이라는 소녀의 말을 들은 뒤, 노트에 적어둘 요약문이다. 문장 말미에 마침표를 붙여라."
+    )
+    messages = [{"role": "system", "content": prompt}, {"role": "user", "content": text}]
+
+    result = await call_chat_completion(messages)
+    return result
+
 async def generate_kiyo_message(conversation_log):
     try:
         logging.debug("[DEBUG] generate_kiyo_message 시작")
