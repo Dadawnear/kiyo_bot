@@ -5,15 +5,21 @@ from aiohttp import web
 
 os.environ["TZ"] = "Asia/Seoul"
 
-# 간단한 HTTP 서버 (Render 포트용)
-async def handle(request):
+# 루트 핸들러
+async def handle_root(request):
     return web.Response(text="Discord bot is running.")
 
+# 헬스 체크 핸들러
+async def handle_health(request):
+    return web.Response(text="OK")
+
+# 웹 서버 시작
 async def start_web_server():
     app = web.Application()
-    app.router.add_get("/", handle)
+    app.router.add_get("/", handle_root)
+    app.router.add_get("/health", handle_health)
 
-    port = int(os.environ.get("PORT", 10000))  # Render는 PORT 환경변수로 포트를 제공해
+    port = int(os.environ.get("PORT", 10000))  # Render에서 제공하는 포트 사용
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
