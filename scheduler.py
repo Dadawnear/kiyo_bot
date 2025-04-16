@@ -6,8 +6,7 @@ import os
 import discord
 import random
 
-from kiyo_brain import generate_kiyo_message_with_time
-from notion_utils import generate_diary_entry, detect_emotion, upload_to_notion
+from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image
 
 # 스케줄러가 client와 conversation_log를 인자로 받아야 순환참조 피할 수 있음
 def setup_scheduler(client, conversation_log):
@@ -34,14 +33,11 @@ def setup_scheduler(client, conversation_log):
                 chosen_style = random.choice(styles)
                 logging.debug(f"[SCHEDULER] 선택된 일기 스타일: {chosen_style}")
 
-                diary_text = await generate_diary_entry(conversation_log, style=chosen_style)
-                logging.debug("[SCHEDULER] 일기 생성 완료")
-
-                emotion = await detect_emotion(diary_text)
-                logging.debug(f"[SCHEDULER] 감정 감지 결과: {emotion}")
-
-                await upload_to_notion(diary_text, emotion_key=emotion)
-                logging.info("[SCHEDULER] 자동 일기 업로드 완료")
+                diary_text, image_url = await generate_diary_and_image(conversation_log, style=chosen_style)
+                if diary_text:
+                    logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {image_url}")
+                else:
+                    logging.warning("[SCHEDULER] 일기 생성 실패")
 
                 conversation_log.clear()
         except Exception as e:
