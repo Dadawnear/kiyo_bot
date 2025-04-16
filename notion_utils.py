@@ -253,3 +253,28 @@ def get_last_diary_timestamp():
     except Exception as e:
         logging.error(f"[NOTION ERROR] 타임스탬프 파싱 실패: {repr(e)}")
         return datetime.now(timezone.utc)
+# ... 생략된 기존 import 및 설정 ...
+
+async def upload_memory_to_notion(original_text, summary, tags=[], category="기억", status="기억 중", message_url=None):
+    now = datetime.now(timezone.utc)
+    iso_date = now.strftime("%Y-%m-%d")
+
+    data = {
+        "parent": { "database_id": os.getenv("NOTION_MEMORY_DB_ID") },
+        "properties": {
+            "기억 내용": { "title": [{"text": {"content": summary}}] },
+            "전체 문장": { "rich_text": [{"text": {"content": original_text}}] },
+            "카테고리": { "multi_select": [{"name": category}] },
+            "태그": { "multi_select": [{"name": tag} for tag in tags] },
+            "상태": { "select": {"name": status} },
+        }
+    }
+
+    if message_url:
+        data["properties"]["연결된 대화 ID"] = { "url": message_url }
+
+    response = requests.post("https://api.notion.com/v1/pages", headers=HEADERS, json=data)
+    if response.status_code != 200:
+        logging.error(f"[NOTION MEMORY ERROR] {response.status_code} - {response.text}")
+    else:
+        logging.info(f"[NOTION MEMORY] 저장 성공: {response.json().get('id')}")
