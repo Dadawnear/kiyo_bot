@@ -5,14 +5,15 @@ import re
 from datetime import datetime, timezone
 import logging
 from dotenv import load_dotenv
-from kiyo_brain import generate_kiyo_message
+from kiyo_brain import generate_kiyo_message, generate_kiyo_memory_summary
 from notion_utils import (
     generate_diary_entry,
     upload_to_notion,
     detect_emotion,
     generate_observation_log,
     upload_observation_to_notion,
-    get_last_diary_timestamp  # ← 이 함수가 이제 정상 작동함
+    upload_memory_to_notion,
+    get_last_diary_timestamp
 )
 
 load_dotenv()
@@ -77,7 +78,6 @@ async def on_message(message):
                 last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
 
             filtered_log = [(speaker, text) for speaker, text in conversation_log]
-
             diary_text = await generate_diary_entry(filtered_log, style=style)
             emotion = await detect_emotion(diary_text)
             await upload_to_notion(diary_text, emotion)
@@ -96,6 +96,21 @@ async def on_message(message):
             logging.error(f"[ERROR] 관찰 기록 생성 오류: {repr(e)}")
             await message.channel.send("크크… 관찰 일지를 지금은 쓸 수 없네.")
         return
+
+    # 기억 저장 트리거
+    if any(keyword in message.content for keyword in ["기억해", "기억해줘", "잊지 마", "기억할래", "기억 좀"]):
+        try:
+            summary = await generate_kiyo_memory_summary(message.content)
+            await upload_memory_to_notion(
+                original_text=message.content,
+                summary=summary,
+                tags=[],
+                category="감정",
+                message_url=message.jump_url
+            )
+            await message.channel.send("크크… 네 말, 기억해둘게.")
+        except Exception as e:
+            logging.error(f"[ERROR] 기억 저장 중 오류: {repr(e)}")
 
     if not message.content.strip():
         return
