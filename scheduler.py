@@ -39,6 +39,7 @@ def setup_scheduler(client, conversation_log, latest_image_getter):
                     emotion = await detect_emotion(diary_text)
                     await upload_to_notion(diary_text, emotion_key=emotion, image_url=image_url)
                     logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {image_url}")
+                    clear_image_url()
                 else:
                     logging.warning("[SCHEDULER] 일기 생성 실패")
 
