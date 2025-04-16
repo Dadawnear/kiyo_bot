@@ -78,10 +78,13 @@ async def on_message(message):
                 last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
 
             filtered_log = [(speaker, text) for speaker, text in conversation_log]
-            diary_text = await generate_diary_entry(filtered_log, style=style)
-            emotion = await detect_emotion(diary_text)
-            await upload_to_notion(diary_text, emotion)
-            await message.channel.send(f"스타일: `{style}` | 감정: `{emotion}` — 일기를 남겼어. 크크…")
+
+            diary_text, image_url = await generate_diary_and_image(filtered_log, style=style)
+            if diary_text:
+                emotion = await detect_emotion(diary_text)
+                await message.channel.send(f"스타일: `{style}` | 감정: `{emotion}` — 일기와 사진을 남겼어. 크크…")
+            else:
+                await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아.")
         except Exception as e:
             logging.error(f"[ERROR] 일기 생성 중 오류: {repr(e)}")
             await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아. 조금 있다가 다시 시도해줘.")
