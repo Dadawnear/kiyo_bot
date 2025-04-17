@@ -118,12 +118,18 @@ async def on_message(message):
             image_url = extract_image_url_from_message(message)
             if image_url:
                 logging.info(f"[MJ] ✅ 업스케일 이미지 저장됨: {image_url}")
+
+                if not last_created_diary_page_id:
+                    # 마지막 일기 ID를 동적으로 조회
+                    last_created_diary_page_id = get_latest_diary_page_id()
+                    logging.info(f"[MJ] 🔄 최근 일기 자동 조회됨: {last_created_diary_page_id}")
+
                 if last_created_diary_page_id:
                     logging.info(f"[MJ] 📘 일기 페이지 ID 있음, 이미지 첨부 시도: {last_created_diary_page_id}")
                     await update_diary_image(last_created_diary_page_id, image_url)
                     clear_latest_image_url()
                 else:
-                    logging.warning("[MJ] ⚠️ 일기 페이지 ID가 None임. 이미지를 첨부할 수 없음.")
+                    logging.warning("[MJ] ❌ 최근 일기 ID 찾기 실패. 이미지 첨부 불가.")
             else:
                 logging.warning(f"[MJ] ⚠️ 업스케일 메시지 감지됨, but 이미지 URL 없음. msg.id: {message.id}")
         else:
