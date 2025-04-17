@@ -123,7 +123,7 @@ async def on_message(message):
                     if deleted >= limit:
                         break
         # 🔧 최근 limit만 제거
-        del conversation_log[-to_remove * 2:]  # 서영/키요 1세트 기준
+        del conversation_log[-limit * 2:] # 서영/키요 1세트 기준
         return
 
     if message.content.strip().startswith("!diary"):
