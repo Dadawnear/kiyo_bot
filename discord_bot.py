@@ -175,7 +175,7 @@ async def on_message(message):
     if not message.content.strip():
         return
 
-    conversation_log.append(("정서영", message.content))
+    conversation_log.append(("정서영", message.content, message.channel.id))
 
     try:
         logging.debug("[GPT] generate_kiyo_message 시작")
@@ -184,7 +184,7 @@ async def on_message(message):
         elapsed = (datetime.now() - start).total_seconds()
         logging.debug(f"[GPT] 응답 완료, 소요 시간: {elapsed:.2f}초")
 
-        conversation_log.append(("キヨ", response))
+        conversation_log.append(("キヨ", response, message.channel.id))
         await message.channel.send(response)
     except Exception as e:
         logging.error(f"[ERROR] 응답 생성 중 오류 발생: {repr(e)}")
