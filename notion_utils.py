@@ -98,7 +98,12 @@ def get_latest_diary_page_id():
 
 async def generate_diary_entry(conversation_log, style="full_diary"):
     logging.debug("[DIARY] generate_diary_entry 시작")
-    user_dialogue = "\n".join([f"{speaker}: {text}" for speaker, text in conversation_log if text.strip()])
+    user_dialogue = "\n".join([
+        f"{speaker}: {text}" 
+        for entry in conversation_log 
+        if len(entry) >= 2 and isinstance(entry[1], str) and entry[1].strip()
+        for speaker, text in [entry[:2]]
+    ])
 
     base_prompt = {
         "full_diary": (
