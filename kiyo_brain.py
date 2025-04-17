@@ -17,6 +17,9 @@ from notion_utils import (
 import random
 import difflib
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 logging.basicConfig(level=logging.DEBUG)
 
 USE_SILLYTAVERN = os.getenv("USE_SILLYTAVERN_API", "false").lower() == "true"
@@ -95,7 +98,7 @@ async def call_chat_completion(messages):
         return "지금은 말하기 어렵겠어. 하지만 그 감정은 어렴풋이 느껴졌어."
 
 def get_time_tone_instruction():
-    hour = datetime.now(KST).hour  # ← UTC 말고 KST 기준으로 시간 가져오기
+    hour = datetime.now(ZoneInfo("Asia/Seoul")).hour  # ← UTC 말고 KST 기준으로 시간 가져오기
     if 0 <= hour < 6:
         return "새벽이다. 몽환적이고 음산한 분위기로, 혼잣말을 섞어 응답해라."
     elif 6 <= hour < 11:
