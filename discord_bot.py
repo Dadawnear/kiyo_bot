@@ -107,7 +107,7 @@ async def on_message(message):
     if not is_target_user(message):
         return
 
-    if isinstance(message.channel, discord.DMChannel) and message.content.startswith("!cleanup"):
+    if message.content.strip().startswith("!cleanup"):
         match = re.search(r"!cleanup(\d*)", message.content.strip())
         limit = int(match.group(1)) if match and match.group(1).isdigit() else 1
         deleted = 0
