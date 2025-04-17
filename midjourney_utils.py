@@ -12,7 +12,7 @@ async def send_midjourney_prompt(client, prompt_text):
             return
 
         # ✅ 프롬프트에 스타일 자동 추가
-        style_suffix = "cinematic kodak film photo --ar 3:2"
+        style_suffix = "kodak ultramax 400, 35mm film, candid snapshot, imperfect framing, soft focus, light grain, slightly overexposed, amateur style --ar 3:2"
         full_prompt = f"{prompt_text}, {style_suffix}"
 
         # 정확한 서버 지정
