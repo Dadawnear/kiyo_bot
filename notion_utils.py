@@ -48,6 +48,15 @@ EMOTION_TAGS = {
     "기록": ["중립", "관찰"]
 }
 
+OBSERVATION_TAGS = [
+    # 🎭 감정 기반
+    "불안", "긴장", "집착", "거리감", "다정함", "무력감", "이해",
+    # 🔍 관찰 태도 기반
+    "기록", "분석", "의심", "몰입", "추론", "판단 보류",
+    # 🧿 민속학자 관점 기반
+    "의례", "금기", "상징", "무의식", "기억", "신화화"
+]
+
 def is_target_user(message):
     return str(message.author) == USER_DISCORD_NAME
 
@@ -165,6 +174,10 @@ async def generate_observation_title(text):
     return response.choices[0].message.content.strip()
 
 
+def select_observation_tags():
+    return random.sample(OBSERVATION_TAGS, k=random.randint(3, 5))
+
+
 async def generate_observation_log(conversation_log):
     logging.debug("[OBSERVATION] generate_observation_log 시작")
 
@@ -205,6 +218,9 @@ async def upload_observation_to_notion(text):
     # 자동 제목 생성
     title_summary = await generate_observation_title(text)
 
+    # 자동 태그 선택
+    selected_tags = select_observation_tags()
+
     # 텍스트를 소제목 기준으로 파싱
     blocks = []
     sections = re.split(r"(?:^|\n)(\d+\.\s.+)", text)
@@ -244,7 +260,10 @@ async def upload_observation_to_notion(text):
         "parent": {"database_id": NOTION_OBSERVATION_DB_ID},
         "properties": {
             "이름": {"title": [{"text": {"content": title_summary}}]},
-            "날짜": {"date": {"start": iso_date}}
+            "날짜": {"date": {"start": iso_date}},
+            "태그": {
+                "multi_select": [{"name": tag} for tag in selected_tags]
+            }
         },
         "children": blocks
     }
