@@ -122,7 +122,7 @@ async def on_message(message):
                     await update_diary_image(last_created_diary_page_id, latest_midjourney_image_url)
                     clear_latest_image_url()
             else:
-            logging.warning(f"[MJ] ⚠️ 업스케일 메시지 감지됨, but 이미지 URL 없음. msg.id: {message.id}")
+                logging.warning(f"[MJ] ⚠️ 업스케일 메시지 감지됨, but 이미지 URL 없음. msg.id: {message.id}")
         else:
             logging.debug(f"[MJ] ⛔ 업스케일 메시지 아님. msg.id: {message.id}")
         return
