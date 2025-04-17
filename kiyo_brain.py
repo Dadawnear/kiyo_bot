@@ -10,7 +10,8 @@ from notion_utils import (
     fetch_recent_memories,
     generate_diary_entry,
     detect_emotion,
-    upload_to_notion
+    upload_to_notion,
+    get_latest_diary_page_id
 )
 
 import random
@@ -248,6 +249,15 @@ async def generate_image_prompt(diary_text):
 async def generate_diary_and_image(conversation_log, client: discord.Client, style="full_diary", latest_image_url=None):
     try:
         logging.debug("[DIARY+IMG] 통합 일기 생성 시작")
+
+        # 🔍 최근 일기 ID 조회
+        recent_diary_id = get_latest_diary_page_id()
+        if not recent_diary_id:
+            logging.debug("[DIARY] 최근 일기가 존재하지 않음. 새로 생성 시작.")
+        else:
+            logging.debug(f"[DIARY] 최근 일기 있음: {recent_diary_id} → 중복 여부 확인 필요 (현재는 강제 생성 진행 중)")
+
+        # 🔧 필요시 조건 분기 가능 (예: 하루에 하나만 만들기 등)
         diary_text = await generate_diary_entry(conversation_log, style=style)
         emotion = await detect_emotion(diary_text)
         image_prompt = await generate_image_prompt(diary_text)
@@ -255,6 +265,7 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
 
         await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_image_url)
         return diary_text, latest_image_url
+
     except Exception as e:
         logging.error(f"[ERROR] generate_diary_and_image 실패: {repr(e)}")
         return None, None
