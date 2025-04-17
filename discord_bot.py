@@ -15,7 +15,7 @@ from notion_utils import (
     upload_observation_to_notion,
     upload_memory_to_notion,
     get_last_diary_timestamp,
-    update_diary_image
+    update_diary_image,
     get_latest_diary_page_id
 )
 
