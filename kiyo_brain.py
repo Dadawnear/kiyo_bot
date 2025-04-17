@@ -321,8 +321,9 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
         image_prompt = await generate_image_prompt(diary_text)
         await send_midjourney_prompt(client, image_prompt)
 
-        await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_image_url)
-        return diary_text, latest_image_url
+        page_id = await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_image_url)
+        return diary_text, page_id  # ← 여기 중요
+
 
     except Exception as e:
         logging.error(f"[ERROR] generate_diary_and_image 실패: {repr(e)}")
