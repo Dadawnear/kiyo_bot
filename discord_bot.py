@@ -124,18 +124,14 @@ async def on_message(message):
     if message.content.strip().startswith("!diary"):
         if not conversation_log:
             await message.channel.send("크크… 아직 나눈 이야기가 없네.")
-            return
+            return  # ← 이거 반드시 있어야 해!
 
         try:
             match = re.search(r"!diary\s+(\w+)", message.content)
             style = match.group(1) if match else "full_diary"
 
-            last_diary_time = get_last_diary_timestamp()
-            if last_diary_time and last_diary_time.tzinfo is None:
-                last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
-
-            filtered_log = [(speaker, text) for speaker, text in conversation_log]
-            diary_text, _, _ = await generate_diary_and_image(filtered_log, client, style=style, latest_image_url=None)
+            filtered_log = [(speaker, text) for speaker, text, *_ in conversation_log]
+            diary_text, _ = await generate_diary_and_image(filtered_log, client, style=style, latest_image_url=None)
 
             if diary_text:
                 emotion = await detect_emotion(diary_text)
@@ -147,6 +143,7 @@ async def on_message(message):
             logging.error(f"[ERROR] 일기 생성 중 오류: {repr(e)}")
             await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아. 조금 있다가 다시 시도해줘.")
         return
+
 
     if message.content.strip().startswith("!observe"):
         try:
