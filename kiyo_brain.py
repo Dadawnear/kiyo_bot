@@ -237,7 +237,7 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
             weather_desc = None
         logging.debug(f"[DEBUG] 날씨 정보: {weather_desc}")
 
-        tone_instruction = {
+        base_tone = {
             "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 응답해라.",
             "분노": "냉소적인 말투로, 날카롭게 반응해라.",
             "혼란": "천천히 설명하듯 말하고, 유도 질문을 섞어라.",
@@ -249,6 +249,7 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
         }.get(emotion, "신구지의 평소 말투로 반응해라.")
 
         time_instruction = get_time_tone_instruction()
+        tone_instruction = f"{base_tone} {time_instruction}"
         logging.debug(f"[DEBUG] 시간 기반 톤: {time_instruction}")
 
         if emoji_emotion:
