@@ -275,7 +275,8 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
 
         messages = [{"role": "system", "content": system_prompt}]
 
-        for speaker, text in conversation_log[-6:]:
+        for entry in conversation_log[-6:]:
+            speaker, text = entry[:2]  # 채널 ID는 무시하고 대사만 사용
             role = "assistant" if speaker == "キヨ" else "user"
             messages.append({"role": role, "content": text})
 
