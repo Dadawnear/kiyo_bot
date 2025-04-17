@@ -62,8 +62,10 @@ def extract_image_url_from_message(message):
     return None
 
 def is_upscaled_image(message):
-    upscale_keywords = ["Upscaled", "Image #", "U1", "U2", "U3", "U4"]
-    return any(keyword in message.content for keyword in upscale_keywords)
+    # 이미지가 첨부돼 있고, Midjourney 봇이 보냈으며, "Image #"나 "Upscale" 등의 문구 포함
+    has_image = any(att.url.endswith((".png", ".jpg", ".jpeg", ".webp")) for att in message.attachments)
+    upscale_keywords = ["Upscaled", "Image #", "U1", "U2", "U3", "U4", "Upscale (", "Image #1", "Image #2", "Image #3", "Image #4"]
+    return has_image and any(keyword in message.content for keyword in upscale_keywords)
 
 @client.event
 async def on_ready():
