@@ -54,7 +54,7 @@ def extract_emoji_emotion(text):
     return None
 
 def get_related_past_message(conversation_log, current_text):
-    past_user_msgs = [text for speaker, text in conversation_log[:-1] if speaker != "キヨ"]
+    past_user_msgs = [entry[1] for entry in conversation_log[:-1] if entry[0] != "キヨ"]
     if not past_user_msgs:
         return None
     similar = difflib.get_close_matches(current_text, past_user_msgs, n=1, cutoff=0.4)
@@ -290,10 +290,8 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
         for entry in conversation_log[-6:]:
             if len(entry) >= 2:
                 speaker, text = entry[0], entry[1]
-            else:
-                continue 
-            role = "assistant" if speaker == "キヨ" else "user"
-            messages.append({"role": role, "content": text})
+                role = "assistant" if speaker == "キヨ" else "user"
+                messages.append({"role": role, "content": text})
 
         logging.debug("[DEBUG] chat completion 호출 직전")
         final_response = await call_chat_completion(messages)
