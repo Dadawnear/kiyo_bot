@@ -1,5 +1,6 @@
 import os
 import logging
+import discord
 
 async def send_midjourney_prompt(client, prompt_text):
     try:
