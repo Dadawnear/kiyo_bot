@@ -92,6 +92,43 @@ async def generate_diary_entry(conversation_log, style="full_diary"):
     )
     return response.choices[0].message.content.strip()
 
+async def update_diary_image(page_id: str, image_url: str):
+    update_data = {
+        "cover": {
+            "type": "external",
+            "external": { "url": image_url }
+        },
+        "children": [
+            {
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": image_url}
+                }
+            }
+        ]
+    }
+
+    try:
+        url = f"https://api.notion.com/v1/pages/{page_id}"
+        response = requests.patch(url, headers=HEADERS, json={"cover": update_data["cover"]})
+        if response.status_code != 200:
+            logging.error(f"[NOTION UPDATE ERROR] Cover update failed: {response.text}")
+        else:
+            logging.info(f"[NOTION] 커버 이미지 업데이트 완료: {image_url}")
+
+        # 내부 이미지 블록 추가
+        block_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
+        block_response = requests.patch(block_url, headers=HEADERS, json={"children": update_data["children"]})
+        if block_response.status_code != 200:
+            logging.error(f"[NOTION UPDATE ERROR] 블록 추가 실패: {block_response.text}")
+        else:
+            logging.info(f"[NOTION] 본문 이미지 추가 완료")
+    except Exception as e:
+        logging.error(f"[NOTION UPDATE EXCEPTION] {e}")
+
+
 async def generate_observation_log(conversation_log):
     logging.debug("[OBSERVATION] generate_observation_log 시작")
 
@@ -217,13 +254,20 @@ async def upload_to_notion(text, emotion_key="기록", image_url=None):
     tags = EMOTION_TAGS.get(emotion_key, ["중립"])
     time_info = diary_date.strftime("%p %I:%M").replace("AM", "오전").replace("PM", "오후")
 
-    blocks = [{
-        "object": "block",
-        "type": "quote",
-        "quote": {
-            "rich_text": [{"type": "text", "text": {"content": f"🕰️ 작성 시간: {time_info}"}}]
+    blocks = [
+        {
+            "object": "block",
+            "type": "quote",
+            "quote": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {"content": f"🕰️ 작성 시간: {time_info}"}
+                    }
+                ]
+            }
         }
-    }]
+    ]
 
     if image_url:
         blocks.append({
@@ -239,32 +283,49 @@ async def upload_to_notion(text, emotion_key="기록", image_url=None):
         "object": "block",
         "type": "paragraph",
         "paragraph": {
-            "rich_text": [{"type": "text", "text": {"content": text}}]
+            "rich_text": [
+                {
+                    "type": "text",
+                    "text": {"content": text}
+                }
+            ]
         }
     })
 
     data = {
-        "parent": { "database_id": NOTION_DATABASE_ID },
-        "cover": {
-            "type": "external",
-            "external": { "url": image_url }
-        } if image_url else None,
+        "parent": {"database_id": NOTION_DATABASE_ID},
         "properties": {
-            "Name": { "title": [{"text": {"content": date_str}}] },
-            "날짜": { "date": { "start": iso_date }},
-            "태그": { "multi_select": [{"name": tag} for tag in tags] }
+            "Name": {
+                "title": [{"text": {"content": date_str}}]
+            },
+            "날짜": {
+                "date": {"start": iso_date}
+            },
+            "태그": {
+                "multi_select": [{"name": tag} for tag in tags]
+            }
         },
         "children": blocks
     }
+
+    if image_url:
+        data["cover"] = {
+            "type": "external",
+            "external": {"url": image_url}
+        }
 
     try:
         response = requests.post("https://api.notion.com/v1/pages", headers=HEADERS, json=data)
         if response.status_code != 200:
             logging.error(f"[NOTION ERROR] {response.status_code} - {response.text}")
+            return None
         else:
-            logging.info(f"[NOTION] 업로드 성공 (커버 포함): {response.json().get('id')}")
+            page_id = response.json().get("id")
+            logging.info(f"[NOTION] 업로드 성공 (커버 포함): {page_id}")
+            return page_id
     except Exception as e:
         logging.error(f"[NOTION ERROR] 업로드 실패: {e}")
+        return None
 
 # ✅ 누락된 함수 추가
 def get_last_diary_timestamp():
