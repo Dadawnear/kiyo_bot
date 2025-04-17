@@ -174,8 +174,32 @@ async def generate_observation_title(text):
     return response.choices[0].message.content.strip()
 
 
-def select_observation_tags():
-    return random.sample(OBSERVATION_TAGS, k=random.randint(3, 5))
+async def generate_observation_tags(observation_text: str) -> list:
+    prompt = (
+        "다음은 민속학자 신구지 코레키요가 정서영과의 대화를 바탕으로 작성한 관찰 기록이야.\n"
+        "이 텍스트를 바탕으로 다음의 태그 중에서 어울리는 항목을 최대 5개 이하로 골라줘.\n"
+        "카테고리는 세 가지야:\n"
+        "1) 감정 기반: 불안, 긴장, 집착, 거리감, 다정함, 무력감, 이해\n"
+        "2) 관찰 태도 기반: 기록, 분석, 의심, 몰입, 추론, 판단 보류\n"
+        "3) 민속학자 관점 기반: 의례, 금기, 상징, 무의식, 기억, 신화화\n\n"
+        "각 태그는 문맥이나 표현 속에 내포된 태도를 고려해서 신중히 골라줘. 예시는 생략하고, 결과는 JSON 리스트 형식으로만 응답해줘.\n"
+        "형식 예시: [\"불안\", \"분석\", \"상징\"]"
+    )
+    messages = [
+        {"role": "system", "content": prompt},
+        {"role": "user", "content": observation_text}
+    ]
+    response = await openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=messages,
+        temperature=0.5
+    )
+    import json
+    try:
+        return json.loads(response.choices[0].message.content.strip())
+    except Exception as e:
+        logging.error(f"[TAG PARSE ERROR] {repr(e)}")
+        return []
 
 
 async def generate_observation_log(conversation_log):
@@ -219,7 +243,7 @@ async def upload_observation_to_notion(text):
     title_summary = await generate_observation_title(text)
 
     # 자동 태그 선택
-    selected_tags = select_observation_tags()
+    selected_tags = await generate_observation_tags(text)
 
     # 텍스트를 소제목 기준으로 파싱
     blocks = []
