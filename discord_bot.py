@@ -104,13 +104,13 @@ async def on_message(message):
 
     MIDJOURNEY_BOT_ID = os.getenv("MIDJOURNEY_BOT_ID")
 
-    if message.author.id == MIDJOURNEY_BOT_ID and "attachments" in message:
+    if int(MIDJOURNEY_BOT_ID) == message.author.id and message.attachments:
         last_midjourney_message[message.id] = message.attachments[0].url
 
     if (
         isinstance(message.channel, discord.TextChannel) and
         message.channel.name == MIDJOURNEY_CHANNEL_NAME and 
-        MIDJOURNEY_BOT_ID and str(message.author.id) == MIDJOURNEY_BOT_ID
+        int(MIDJOURNEY_BOT_ID) == message.author.id
     ):
         if is_upscaled_image(message):
             image_url = extract_image_url_from_message(message)
