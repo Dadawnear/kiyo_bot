@@ -16,6 +16,7 @@ from notion_utils import (
     upload_memory_to_notion,
     get_last_diary_timestamp,
     update_diary_image
+    get_latest_diary_page_id
 )
 
 load_dotenv()
