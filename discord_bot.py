@@ -34,6 +34,7 @@ intents.members = True
 intents.dm_messages = True
 
 client = discord.Client(intents=intents)
+last_midjourney_message = {}
 conversation_log = []
 latest_midjourney_image_url = None
 last_created_diary_page_id = None
@@ -80,16 +81,31 @@ async def on_ready():
         logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
 
 @client.event
+async def on_raw_message_edit(payload):
+    data = payload.data
+    if "attachments" in data and len(data["attachments"]) > 0:
+        image_url = data["attachments"][0]["url"]
+        if last_created_diary_page_id:
+            await update_diary_image(last_created_diary_page_id, image_url)
+
+@client.event
+async def on_raw_message_delete(payload):
+    deleted_message_id = payload.message_id
+    if deleted_message_id in last_midjourney_message:
+        image_url = last_midjourney_message[deleted_message_id]
+        await update_diary_image(last_created_diary_page_id, image_url)
+
+@client.event
 async def on_message(message):
     global latest_midjourney_image_url
     global last_created_diary_page_id
 
     logging.debug(f"[on_message] 받은 메시지: {message.content} from {message.author}")
 
-    if message.author == client.user:
-        return
-
     MIDJOURNEY_BOT_ID = os.getenv("MIDJOURNEY_BOT_ID")
+
+    if message.author.id == MIDJOURNEY_BOT_ID and "attachments" in message:
+        last_midjourney_message[message.id] = message.attachments[0].url
 
     if (
         isinstance(message.channel, discord.TextChannel) and
