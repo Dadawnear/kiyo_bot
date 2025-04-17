@@ -305,8 +305,10 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
 async def generate_image_prompt(diary_text):
     messages = [
         {"role": "system", "content": (
-            "다음은 신구지 코레키요가 쓴 일기야. 이걸 바탕으로 신구지가 직접 찍은 시네마틱 사진을 묘사해줘. "
-            "형식은 'A cinematic photo of ...'로 시작해야 하고, 사람 얼굴은 절대 없어야 해.")},
+            "신구지 코레키요는 오늘 하루를 보낸 뒤, 장면 하나를 사진으로 남겼어. 너무 잘 찍으려고 하지 않았고,"
+            " 필름카메라로 무심히 셔터를 눌렀을 뿐이야. 설명이 아니라 관찰처럼, 감정이 아니라 표면처럼 묘사해."
+            " 얼굴은 절대 나오면 안 돼. 배경은 한국의 도시나 풍경일 수 있고, 조명은 자연스럽거나 조금 흐리거나 해."
+            " 묘사는 'A cinematic photo of ...'로 시작해, 그리고 문장은 한 문단으로만.")},
         {"role": "user", "content": diary_text}
     ]
     response = await openai_client.chat.completions.create(model="gpt-4o", messages=messages)
