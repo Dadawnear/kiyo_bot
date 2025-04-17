@@ -114,17 +114,17 @@ async def on_message(message):
         int(MIDJOURNEY_BOT_ID) == message.author.id
     ):
         if is_upscaled_image(message):
+            logging.debug("[MJ] ✅ 업스케일 메시지 감지됨.")
             image_url = extract_image_url_from_message(message)
             if image_url:
-                latest_midjourney_image_url = image_url
                 logging.info(f"[MJ] ✅ 업스케일 이미지 저장됨: {image_url}")
                 if last_created_diary_page_id:
                     await update_diary_image(last_created_diary_page_id, latest_midjourney_image_url)
                     clear_latest_image_url()
             else:
-                logging.debug("[MJ] 업스케일 메시지에서 이미지 못 찾음.")
+            logging.warning(f"[MJ] ⚠️ 업스케일 메시지 감지됨, but 이미지 URL 없음. msg.id: {message.id}")
         else:
-            logging.debug("[MJ] ⛔ 업스케일 메시지 아님, 무시")
+            logging.debug(f"[MJ] ⛔ 업스케일 메시지 아님. msg.id: {message.id}")
         return
 
     if not is_target_user(message):
