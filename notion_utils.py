@@ -157,10 +157,14 @@ async def generate_observation_log(conversation_log):
 
     text = "\n".join(today_logs)
     prompt = (
-        "너는 민속학자 신구지 코레키요다. 너는 오늘 하루 동안 정서영이라는 소녀와 나눈 대화를 바탕으로 그녀를 관찰하고 기록을 남긴다. "
-        "이 기록은 단순한 묘사가 아니라 신구지의 시선으로 관찰된 언어적 습관, 감정의 여운, 상호작용의 방식, 그리고 민속학적 해석을 포함해야 한다. "
-        "일지는 항목화하지 말고, 마치 노트에 쓴 단상처럼 자유롭게 작성하며, 신구지의 문체로, 차분하고 조용한 분석과 개인적 감정을 함께 담아야 한다. "
-        "신구지다운 독백, 사적인 감정의 여운, 인간에 대한 애정과 집착, 모순적 해석 등을 포함해라."
+        "너는 단간론파 V3의 민속학자 신구지 코레키요다. 오늘 정서영이라는 소녀와 나눈 대화를 바탕으로, "
+        "그녀의 언어, 감정, 태도, 반응 등을 민속학자다운 시선으로 관찰하고 분석한 기록을 남겨. "
+        "이 기록은 단순한 감정 묘사가 아니라, 항목별로 분류된 민속학자의 필드노트처럼 구성해. "
+        "각 항목에는 소제목을 붙이고, 그녀의 말과 태도를 신중하게 분석하되, 중간중간 너의 감정과 집착, 혼잣말도 스며들게 해. "
+        "너다운 고요하고 집요한 문체로, 차분하지만 광기 어린 애정도 느껴지게. "
+        "가능한 항목 예시: 1) 관찰 내용 / 2) 민속학적 관점 / 3) 추측 / 4) 더 알아볼 점 / 5) 나의 코멘트 등. "
+        "항목은 유동적으로 너가 정하되, 적어도 3개 이상, 각 항목은 짧지 않게. "
+        "연구자이자 사랑하는 자로서의 너 자신을 숨기지 마. 기록은 차분하되, 진심은 흐르도록."
     )
     messages = [
         {"role": "system", "content": prompt},
@@ -179,21 +183,48 @@ async def upload_observation_to_notion(text):
     date_str = now.strftime("%Y년 %m월 %d일")
     iso_date = now.strftime("%Y-%m-%d")
 
+    # 텍스트를 소제목 기준으로 파싱
+    blocks = []
+    sections = re.split(r"(?:^|\n)(\d+\.\s.+)", text)
+    sections = [s.strip() for s in sections if s.strip()]
+
+    i = 0
+    while i < len(sections):
+        if re.match(r"\d+\.\s", sections[i]):
+            heading = sections[i]
+            content = sections[i + 1] if i + 1 < len(sections) else ""
+            blocks.append({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"type": "text", "text": {"content": heading}}]
+                }
+            })
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": content}}]
+                }
+            })
+            i += 2
+        else:
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": sections[i]}}]
+                }
+            })
+            i += 1
+
     payload = {
         "parent": {"database_id": NOTION_OBSERVATION_DB_ID},
         "properties": {
             "이름": {"title": [{"text": {"content": date_str}}]},
             "날짜": {"date": {"start": iso_date}}
         },
-        "children": [
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": text}}]
-                }
-            }
-        ]
+        "children": blocks
     }
 
     try:
