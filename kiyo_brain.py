@@ -3,7 +3,7 @@ import aiohttp
 import logging
 import discord
 from openai import AsyncOpenAI
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from midjourney_utils import send_midjourney_prompt
 from notion_utils import (
     fetch_recent_notion_summary,
@@ -23,6 +23,8 @@ USE_SILLYTAVERN = os.getenv("USE_SILLYTAVERN_API", "false").lower() == "true"
 SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/v1")
 
 FACE_TO_FACE_CHANNEL_ID = 1362310907711197194
+
+KST = timezone(timedelta(hours=9))  # ← 한국 시간대 객체 생성
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -93,7 +95,7 @@ async def call_chat_completion(messages):
         return "지금은 말하기 어렵겠어. 하지만 그 감정은 어렴풋이 느껴졌어."
 
 def get_time_tone_instruction():
-    hour = datetime.now().hour
+    hour = datetime.now(KST).hour  # ← UTC 말고 KST 기준으로 시간 가져오기
     if 0 <= hour < 6:
         return "새벽이다. 몽환적이고 음산한 분위기로, 혼잣말을 섞어 응답해라."
     elif 6 <= hour < 11:
