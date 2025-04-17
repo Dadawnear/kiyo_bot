@@ -12,8 +12,10 @@ async def send_midjourney_prompt(client, prompt_text):
             return
 
         # ✅ 프롬프트에 스타일 자동 추가
-        style_suffix = "kodak ultramax 400, 35mm film, candid snapshot, imperfect framing, soft focus, light grain, slightly overexposed, amateur style --ar 3:2"
-        full_prompt = f"{prompt_text}, {style_suffix}"
+        STYLE_SUFFIX = (
+            "unprofessional photography, expired kodak gold 200, 35mm film, candid snapshot, imperfect framing, soft focus, light grain, "
+            "slightly overexposed, amateur aesthetic, mundane photo, low saturation, motion blur, poorly exposed, flash glare, low fidelity"
+        )
 
         # 정확한 서버 지정
         guild = discord.utils.get(client.guilds, name=server_name)
@@ -27,9 +29,9 @@ async def send_midjourney_prompt(client, prompt_text):
             logging.error(f"[MJ] 채널을 찾을 수 없어: {channel_name}")
             return
 
-        mention_prompt = f"<@{midjourney_bot_id}> imagine prompt: {full_prompt}"
+        mention_prompt = f"<@{midjourney_bot_id}> imagine prompt: {STYLE_SUFFIX}, {prompt_text}, --ar 3:2"
         await channel.send(mention_prompt)
-        logging.info(f"[MJ] 프롬프트 전송 성공 (멘션 방식): {full_prompt}")
+        logging.info(f"[MJ] 프롬프트 전송 성공 (멘션 방식): {mention_prompt}")
 
     except Exception as e:
         logging.error(f"[MJ] 프롬프트 전송 실패: {repr(e)}")
