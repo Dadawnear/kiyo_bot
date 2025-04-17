@@ -74,6 +74,28 @@ async def detect_emotion(text):
         return "망상"
     return "기록"
 
+def get_latest_diary_page_id():
+    url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
+    data = {
+        "page_size": 1,
+        "sorts": [{"property": "날짜", "direction": "descending"}]
+    }
+
+    try:
+        response = requests.post(url, headers=HEADERS, json=data)
+        if response.status_code != 200:
+            logging.error(f"[NOTION ERROR] 최근 일기 ID 가져오기 실패: {response.text}")
+            return None
+
+        results = response.json().get("results", [])
+        if not results:
+            return None
+
+        return results[0]["id"]
+    except Exception as e:
+        logging.error(f"[NOTION ERROR] 예외 발생 - {repr(e)}")
+        return None
+
 async def generate_diary_entry(conversation_log, style="full_diary"):
     logging.debug("[DIARY] generate_diary_entry 시작")
     user_dialogue = "\n".join([f"{speaker}: {text}" for speaker, text in conversation_log if text.strip()])
