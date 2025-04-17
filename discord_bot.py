@@ -111,20 +111,16 @@ async def on_message(message):
         match = re.search(r"!cleanup(\d*)", message.content.strip())
         limit = int(match.group(1)) if match and match.group(1).isdigit() else 1
         deleted = 0
-        to_remove = 0
-            async for msg in message.channel.history(limit=limit + 20):
-                if msg.author == client.user:
-                    try:
-                        await msg.delete()
-                        deleted += 1
-                        to_remove += 1
-                    except Exception as e:
-                        logging.warning(f"메시지 삭제 실패: {repr(e)}")
-                    if deleted >= limit:
-                        break
+        async for msg in message.channel.history(limit=limit + 20):
+            if msg.author == client.user:
+                await msg.delete()
+                deleted += 1
+                if deleted >= limit:
+                    break
         # 🔧 최근 limit만 제거
-        del conversation_log[-limit * 2:] # 서영/키요 1세트 기준
+        del conversation_log[-limit * 2:]  # 서영/키요 1세트 기준
         return
+
 
     if message.content.strip().startswith("!diary"):
         if not conversation_log:
