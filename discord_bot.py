@@ -160,7 +160,7 @@ async def on_message(message):
 
     if any(keyword in message.content for keyword in ["기억해", "기억해줘", "잊지 마", "기억할래", "기억 좀"]):
         try:
-            summary = await generate_kiyo_memory_summary(message.content)
+            summary = await generate_kiyo_message(conversation_log, channel_id=message.channel.id)
             await upload_memory_to_notion(
                 original_text=message.content,
                 summary=summary,
@@ -180,7 +180,7 @@ async def on_message(message):
     try:
         logging.debug("[GPT] generate_kiyo_message 시작")
         start = datetime.now()
-        response = await generate_kiyo_message(conversation_log)
+        response = await generate_kiyo_message(conversation_log, channel_id=message.channel.id)
         elapsed = (datetime.now() - start).total_seconds()
         logging.debug(f"[GPT] 응답 완료, 소요 시간: {elapsed:.2f}초")
 
