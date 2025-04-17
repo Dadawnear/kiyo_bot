@@ -174,7 +174,8 @@ async def update_diary_image(page_id: str, image_url: str):
 
         # 내부 이미지 블록 추가
         block_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
-        block_response = requests.patch(block_url, headers=HEADERS, json={"children": update_data["children"]})
+        block_response = requests.post(block_url, headers=HEADERS, json={"children": update_data["children"]})
+        logging.info(f"[NOTION] 본문 이미지 URL 추가 시도: {image_url}")
         if block_response.status_code != 200:
             logging.error(f"[NOTION UPDATE ERROR] 블록 추가 실패: {block_response.text}")
         else:
