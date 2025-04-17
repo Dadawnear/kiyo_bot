@@ -135,7 +135,7 @@ async def on_message(message):
                 last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
 
             filtered_log = [(speaker, text) for speaker, text in conversation_log]
-            diary_text, _ = await generate_diary_and_image(filtered_log, client, style=style, latest_image_url=None)
+            diary_text, _, _ = await generate_diary_and_image(filtered_log, client, style=style, latest_image_url=None)
 
             if diary_text:
                 emotion = await detect_emotion(diary_text)
