@@ -188,9 +188,10 @@ async def generate_face_to_face_response(conversation_log):
 
         messages = [{"role": "system", "content": system_prompt}]
         for entry in conversation_log[-6:]:
-            speaker, text = entry[:2]  # 채널 ID는 무시하고 대사만 사용
-            role = "assistant" if speaker == "キヨ" else "user"
-            messages.append({"role": role, "content": text})
+            if len(entry) >= 2:
+                speaker, text = entry[0], entry[1]
+                role = "assistant" if speaker == "キヨ" else "user"
+                messages.append({"role": role, "content": text})
 
         logging.debug("[DEBUG] [대면] chat completion 호출 직전")
         final_response = await call_chat_completion(messages)
