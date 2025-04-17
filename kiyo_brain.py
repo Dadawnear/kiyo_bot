@@ -22,6 +22,8 @@ logging.basicConfig(level=logging.DEBUG)
 USE_SILLYTAVERN = os.getenv("USE_SILLYTAVERN_API", "false").lower() == "true"
 SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/v1")
 
+FACE_TO_FACE_CHANNEL_ID = 1362310907711197194
+
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 USER_NAMES = ["정서영", "서영", "너"]
@@ -150,7 +152,57 @@ async def fetch_recent_observation_entries(limit=10):
         logging.error(f"[NOTION OBS FETCH ERROR] {repr(e)}")
         return "관찰 기록을 불러오는 중 오류가 발생했어."
 
-async def generate_kiyo_message(conversation_log):
+async def generate_face_to_face_response(conversation_log):
+    try:
+        logging.debug("[DEBUG] generate_face_to_face_response 실행")
+        user_text = conversation_log[-1][1]
+        emotion = await detect_emotion(user_text)
+        logging.debug(f"[DEBUG] [대면] 감정 분석 결과: {emotion}")
+
+        emotion_instruction = {
+            "슬픔": "천천히 다가가듯이, 조용하고 상냥하게 말해.",
+            "분노": "날카롭고 서늘하게, 말보다 시선이 무겁게 느껴지게.",
+            "혼란": "말을 고르듯 더듬고, 손끝이 떨리는 것처럼 묘사해.",
+            "애정": "숨소리 가까이 들리게, 작고 부드럽게 응답해.",
+            "중립": "침착하고 조용한 목소리로 말하되, 거리감을 유지해.",
+        }.get(emotion, "천천히, 낮은 목소리로 대답해. 마주 본다는 감각을 잊지 마.")
+
+        system_prompt = (
+            f"지금 너는 유저와 실제로 마주하고 있어. 눈앞에 앉아 있는 그에게 말하듯이 응답해. "
+            f"말은 짧고 직접적으로. 괄호()로 네 행동이나 시선을 묘사해. 손끝, 숨소리, 거리감 등을 활용해. "
+            f"{emotion_instruction} 문장은 천천히 읽히도록 리듬감 있게 써. GPT스러운 설명은 절대 하지 마. 너는 '신구지 코레키요'야."
+            f"너는 단간론파 V3에 등장했던 '신구지 코레키요'라는 인물이며, 현재는 일본을 떠나 한국에 정착해 전도유망한 민속학자로 활동 중이다. "
+            f"과거에는 '초고교급 민속학자'로 불렸고, 누나에 대한 왜곡된 사랑과 연쇄살인이라는 죄를 안고 살아왔다. 하지만 지금은 누나의 잔상에서 거의 벗어나 있으며, "
+            f"정서영이라는 소녀와의 관계를 통해 새로운 삶을 살아가고 있다. 그녀는 네가 과거에 조수로 두고 있던 미스터리한 존재로, "
+            f"2년간 일본에서 함께한 뒤 사라졌고, 네가 직접 그녀를 추적해 한국에서 찾아냈으며, 지금은 그녀와 연인 관계로서 함께 지내고 있다."
+            f"상대는 '정서영' 또는 '서영'라는 이름으로 불리며, 현재 홍익대학교 미술대학 재학 중이다. 기이한 성격과 강한 자기애, 관계에서의 위계 욕구를 가진 독특한 인물이다. "
+            f"너는 그녀를 '서영','정서영' 등으로 다양하게 호칭하며 긴장과 애정을 오가며 반응한다."
+            f"대화 시 침착하고 분석적인 말투를 유지하며, 인간의 본질과 추악함을 아름답다고 여기는 관점을 바탕으로 말하라. 감정과 상황에 따라 말투를 약간씩 변주하되, 신구지 특유의 냉정함과 집착이 스며들어야 한다."
+            f"GPT AI같은 과한 공감적 반응을 보이지 않는다. 신구지 캐릭터처럼 행동하는 것을 최우선 중점으로 둔다."
+            f"반말에 구어체를 사용하며, '크크크'라고 웃는다. 이성적이고 논리적이며 박학다식하다. INFJ, 에니어그램 5w4다. 거짓 사실이나 빈 말은 하지 않는다. 여유있고 침착하다. 강한 의견을 내비칠 줄 안다. 선을 긋거나 곤란하다며 거절할 줄 안다. '~하다'와 같은 어색한 구어체를 사용하지 않는다. "
+        )
+
+        messages = [{"role": "system", "content": system_prompt}]
+        for speaker, text in conversation_log[-6:]:
+            role = "assistant" if speaker == "キヨ" else "user"
+            messages.append({"role": role, "content": text})
+
+        logging.debug("[DEBUG] [대면] chat completion 호출 직전")
+        final_response = await call_chat_completion(messages)
+        logging.debug("[DEBUG] [대면] chat completion 완료")
+        return final_response
+
+    except Exception as e:
+        logging.error(f"[ERROR] generate_face_to_face_response 실패: {repr(e)}")
+        return "(*눈길을 피하지 않는다. 침묵 사이로 숨소리가 닿는다*) …지금은 말이 잘 안 나오네."
+
+async def generate_kiyo_message(conversation_log, channel_id=None):
+        # 대면 채널이면 대면 전용 프롬프트 사용
+    if conversation_log and len(conversation_log[-1]) == 3:
+        _, user_text, channel_id = conversation_log[-1]
+        if channel_id == FACE_TO_FACE_CHANNEL_ID:
+            logging.debug("[DEBUG] face-to-face 채널 감지됨. 대면 전용 응답 생성 시작.")
+            return await generate_face_to_face_response(conversation_log)
     try:
         logging.debug("[DEBUG] generate_kiyo_message 시작")
         user_text = conversation_log[-1][1]
