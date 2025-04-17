@@ -11,6 +11,10 @@ async def send_midjourney_prompt(client, prompt_text):
             logging.error("[MJ] MIDJOURNEY_BOT_ID가 .env에 설정되지 않았어.")
             return
 
+        # ✅ 프롬프트에 스타일 자동 추가
+        style_suffix = "cinematic kodak film photo --ar 3:2"
+        full_prompt = f"{prompt_text}, {style_suffix}"
+
         # 정확한 서버 지정
         guild = discord.utils.get(client.guilds, name=server_name)
         if not guild:
@@ -23,10 +27,9 @@ async def send_midjourney_prompt(client, prompt_text):
             logging.error(f"[MJ] 채널을 찾을 수 없어: {channel_name}")
             return
 
-        mention_prompt = f"<@{midjourney_bot_id}> imagine prompt: {prompt_text}"
+        mention_prompt = f"<@{midjourney_bot_id}> imagine prompt: {full_prompt}"
         await channel.send(mention_prompt)
-        logging.info(f"[MJ] 프롬프트 전송 성공 (멘션 방식): {prompt_text}")
+        logging.info(f"[MJ] 프롬프트 전송 성공 (멘션 방식): {full_prompt}")
 
     except Exception as e:
         logging.error(f"[MJ] 프롬프트 전송 실패: {repr(e)}")
-
