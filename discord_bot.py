@@ -24,6 +24,7 @@ logging.basicConfig(level=logging.DEBUG)
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 USER_DISCORD_NAME = os.getenv("USER_DISCORD_NAME")
 MIDJOURNEY_CHANNEL_NAME = "midjourney-image-channel"
+MIDJOURNEY_BOT_ID = os.getenv("MIDJOURNEY_BOT_ID")
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -88,7 +89,7 @@ async def on_message(message):
     if (
         isinstance(message.channel, discord.TextChannel) and
         message.channel.name == MIDJOURNEY_CHANNEL_NAME and 
-        str(message.author.id) == MIDJOURNEY_BOT_ID
+        MIDJOURNEY_BOT_ID and str(message.author.id) == MIDJOURNEY_BOT_ID
     ):
         if is_upscaled_image(message):
             image_url = extract_image_url_from_message(message)
@@ -131,7 +132,7 @@ async def on_message(message):
             match = re.search(r"!diary\s+(\w+)", message.content)
             style = match.group(1) if match else "full_diary"
 
-            filtered_log = [(speaker, text) for speaker, text, *_ in conversation_log]
+            filtered_log = [(entry[0], entry[1]) for entry in conversation_log if len(entry) >= 2]  # ← 기존엔 entry[:2] 식으로 위험한 언팩 사용
             diary_text, _ = await generate_diary_and_image(filtered_log, client, style=style, latest_image_url=None)
 
             if diary_text:
@@ -158,7 +159,7 @@ async def on_message(message):
 
     if any(keyword in message.content for keyword in ["기억해", "기억해줘", "잊지 마", "기억할래", "기억 좀"]):
         try:
-            summary = await generate_kiyo_message(conversation_log, channel_id=message.channel.id)
+            summary = await generate_kiyo_memory_summary(message.content)
             await upload_memory_to_notion(
                 original_text=message.content,
                 summary=summary,
