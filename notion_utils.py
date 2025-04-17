@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 import re
 import requests
+import random
 from openai import AsyncOpenAI
 
 load_dotenv()
@@ -420,7 +421,6 @@ def get_last_diary_timestamp():
     except Exception as e:
         logging.error(f"[NOTION ERROR] 타임스탬프 파싱 실패: {repr(e)}")
         return datetime.now(timezone.utc)
-# ... 생략된 기존 import 및 설정 ...
 
 async def upload_memory_to_notion(original_text, summary, tags=[], category="기억", status="기억 중", message_url=None):
     now = datetime.now(timezone.utc)
