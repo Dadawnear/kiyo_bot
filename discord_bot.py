@@ -51,7 +51,8 @@ def is_target_user(message):
 
 def extract_image_url_from_message(message):
     for attachment in message.attachments:
-        if attachment.url.endswith((".png", ".jpg", ".jpeg")):
+        url_without_query = attachment.url.split("?")[0]
+        if url_without_query.endswith((".png", ".jpg", ".jpeg")):
             return attachment.url
     for embed in message.embeds:
         if embed.type == "image" and embed.url:
