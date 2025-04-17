@@ -119,8 +119,11 @@ async def on_message(message):
             if image_url:
                 logging.info(f"[MJ] ✅ 업스케일 이미지 저장됨: {image_url}")
                 if last_created_diary_page_id:
-                    await update_diary_image(last_created_diary_page_id, latest_midjourney_image_url)
+                    logging.info(f"[MJ] 📘 일기 페이지 ID 있음, 이미지 첨부 시도: {last_created_diary_page_id}")
+                    await update_diary_image(last_created_diary_page_id, image_url)
                     clear_latest_image_url()
+                else:
+                    logging.warning("[MJ] ⚠️ 일기 페이지 ID가 None임. 이미지를 첨부할 수 없음.")
             else:
                 logging.warning(f"[MJ] ⚠️ 업스케일 메시지 감지됨, but 이미지 URL 없음. msg.id: {message.id}")
         else:
