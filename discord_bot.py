@@ -1,3 +1,4 @@
+
 import os
 import discord
 import asyncio
@@ -13,7 +14,8 @@ from notion_utils import (
     generate_observation_log,
     upload_observation_to_notion,
     upload_memory_to_notion,
-    get_last_diary_timestamp
+    get_last_diary_timestamp,
+    update_diary_image
 )
 
 load_dotenv()
@@ -33,12 +35,11 @@ intents.dm_messages = True
 client = discord.Client(intents=intents)
 conversation_log = []
 latest_midjourney_image_url = None
+last_created_diary_page_id = None
 
-# 🔹 Midjourney 이미지 URL을 safely 가져오는 함수
 def get_latest_image_url():
     return latest_midjourney_image_url
 
-# 🔹 Midjourney 이미지 URL을 safely 초기화하는 함수
 def clear_latest_image_url():
     global latest_midjourney_image_url
     latest_midjourney_image_url = None
@@ -46,17 +47,10 @@ def clear_latest_image_url():
 def is_target_user(message):
     return str(message.author) == USER_DISCORD_NAME
 
-def extract_image_url(text):
-    match = re.search(r"(https://cdn\.discordapp\.com/attachments/[^\s]+\.(?:png|jpg|jpeg))", text)
-    return match.group(1) if match else None
-
 def extract_image_url_from_message(message):
-    # attachments 우선
     for attachment in message.attachments:
         if attachment.url.endswith((".png", ".jpg", ".jpeg")):
             return attachment.url
-
-    # embeds에서 이미지 URL 추출
     for embed in message.embeds:
         if embed.type == "image" and embed.url:
             return embed.url
@@ -64,11 +58,9 @@ def extract_image_url_from_message(message):
             return embed.thumbnail.url
         if embed.image and embed.image.url:
             return embed.image.url
-
     return None
 
 def is_upscaled_image(message):
-    # Midjourney 업스케일 메시지인지 판단
     upscale_keywords = ["Upscaled", "Image #", "U1", "U2", "U3", "U4"]
     return any(keyword in message.content for keyword in upscale_keywords)
 
@@ -84,6 +76,7 @@ async def on_ready():
 @client.event
 async def on_message(message):
     global latest_midjourney_image_url
+    global last_created_diary_page_id
 
     logging.debug(f"[on_message] 받은 메시지: {message.content} from {message.author}")
 
@@ -97,19 +90,19 @@ async def on_message(message):
         message.channel.name == MIDJOURNEY_CHANNEL_NAME and 
         str(message.author.id) == MIDJOURNEY_BOT_ID
     ):
-        image_url = extract_image_url_from_message(message)
-        # 🔸 업스케일 결과만 추적
         if is_upscaled_image(message):
             image_url = extract_image_url_from_message(message)
             if image_url:
                 latest_midjourney_image_url = image_url
                 logging.info(f"[MJ] ✅ 업스케일 이미지 저장됨: {image_url}")
+                if last_created_diary_page_id:
+                    await update_diary_image(last_created_diary_page_id, latest_midjourney_image_url)
+                    clear_latest_image_url()
             else:
                 logging.debug("[MJ] 업스케일 메시지에서 이미지 못 찾음.")
         else:
             logging.debug("[MJ] ⛔ 업스케일 메시지 아님, 무시")
         return
-
 
     if not is_target_user(message):
         return
@@ -141,16 +134,12 @@ async def on_message(message):
                 last_diary_time = last_diary_time.replace(tzinfo=timezone.utc)
 
             filtered_log = [(speaker, text) for speaker, text in conversation_log]
-
-            diary_text, _ = await generate_diary_and_image(
-                filtered_log, client, style=style, latest_image_url=latest_midjourney_image_url
-            )
+            diary_text, _ = await generate_diary_and_image(filtered_log, client, style=style, latest_image_url=None)
 
             if diary_text:
                 emotion = await detect_emotion(diary_text)
-                await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_midjourney_image_url)
-                await message.channel.send(f"스타일: `{style}` | 감정: `{emotion}` — 일기와 사진을 남겼어. 크크…")
-                latest_midjourney_image_url = None
+                last_created_diary_page_id = await upload_to_notion(diary_text, emotion_key=emotion, image_url=None)
+                await message.channel.send(f"스타일: `{style}` | 감정: `{emotion}` — 일기를 남겼어. 크크…")
             else:
                 await message.channel.send("크크… 일기 작성이 지금은 어려운 것 같아.")
         except Exception as e:
