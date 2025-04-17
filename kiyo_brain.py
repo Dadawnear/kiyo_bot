@@ -290,6 +290,8 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
         for entry in conversation_log[-6:]:
             if len(entry) >= 2:
                 speaker, text = entry[0], entry[1]
+            else:
+                continue 
             role = "assistant" if speaker == "キヨ" else "user"
             messages.append({"role": role, "content": text})
 
