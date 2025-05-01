@@ -5,6 +5,7 @@ import asyncio
 import re
 import logging
 import pytz
+from discord.ext import commands
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from kiyo_brain import (
@@ -44,6 +45,7 @@ intents.message_content = True
 intents.guilds = True
 intents.members = True
 intents.dm_messages = True
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 client = discord.Client(intents=intents)
 last_midjourney_message = {}
