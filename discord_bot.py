@@ -131,6 +131,9 @@ async def on_message(message):
 
 @client.event
 async def on_ready():
+    logging.info(f'Logged in as {client.user}')
+    if not check_initiate_message.is_running():
+        check_initiate_message.start(client)  
     global scheduler_initialized
     print(f"[READY] Logged in as {client.user}")
 
