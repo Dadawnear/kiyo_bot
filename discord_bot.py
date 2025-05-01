@@ -39,6 +39,7 @@ last_midjourney_message = {}
 conversation_log = []
 latest_midjourney_image_url = None
 last_created_diary_page_id = None
+scheduler_initialized = False
 
 def get_latest_image_url():
     return latest_midjourney_image_url
