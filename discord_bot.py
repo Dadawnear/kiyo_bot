@@ -27,6 +27,7 @@ from notion_utils import (
     mark_reminder_sent,
     update_task_completion
 )
+from initiate_checker import check_initiate_message
 
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
@@ -115,7 +116,17 @@ async def reminder_loop():
     while True:
         await check_todo_reminders()
         await asyncio.sleep(600)
-        
+
+@bot.event
+async def on_ready():
+    print(f'{bot.user} is now online.')
+    check_initiate_message.start()  # 신구지 먼저 말 걸기 루프 시작
+
+@bot.event
+async def on_message(message):
+    if message.author.name == USER_DISCORD_NAME:
+        update_last_active(message.author.id)  # notion_utils.py의 함수
+    await bot.process_commands(message)
 
 @client.event
 async def on_ready():
