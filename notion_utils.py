@@ -1,13 +1,17 @@
 import os
 import discord
 import asyncio
-from dotenv import load_dotenv
-from datetime import datetime, timedelta, timezone
 import logging
 import re
 import requests
 import random
+import datetime
+import pytz
 from openai import AsyncOpenAI
+from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
+
+KST = pytz.timezone("Asia/Seoul")
 
 load_dotenv()
 
@@ -18,6 +22,7 @@ NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID")
 NOTION_OBSERVATION_DB_ID = os.getenv("NOTION_OBSERVATION_DB_ID")
 NOTION_MEMORY_DB_ID = os.getenv("NOTION_MEMORY_DB_ID")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+TODO_DATABASE_ID = os.getenv("TODO_DATABASE_ID")
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -516,3 +521,71 @@ async def upload_memory_to_notion(original_text, summary, tags=[], category="기
         logging.error(f"[NOTION MEMORY ERROR] {response.status_code} - {response.text}")
     else:
         logging.info(f"[NOTION MEMORY] 저장 성공: {response.json().get('id')}")
+
+def fetch_pending_todos():
+    database_id = TODO_DATABASE_ID
+    now = datetime.datetime.now(KST)
+    today_weekday = now.strftime("%a")
+    today_iso = now.isoformat()
+
+    response = notion.databases.query(
+        **{
+            "database_id": database_id,
+            "filter": {
+                "and": [
+                    {"property": "완료 여부", "checkbox": {"equals": False}},
+                    {
+                        "or": [
+                            {"property": "반복", "select": {"equals": "없음"}},
+                            {"property": "반복", "select": {"equals": "매일"}},
+                            {
+                                "and": [
+                                    {"property": "반복", "select": {"equals": "매주"}},
+                                    {"property": "요일", "multi_select": {"contains": today_weekday}}
+                                ]
+                            }
+                        ]
+                    },
+                    {"property": "예정 시간", "date": {"on_or_before": today_iso}}
+                ]
+            }
+        }
+    )
+
+    print(f"[DEBUG] 📋 {len(response['results'])}개의 미완료 할 일이 감지됨")
+    return response["results"]
+
+def reset_daily_todos():
+    database_id = TODO_DATABASE_ID
+    response = notion.databases.query(
+        **{
+            "database_id": database_id,
+            "filter": {
+                "and": [
+                    {"property": "반복", "select": {"equals": "매일"}},
+                    {"property": "완료 여부", "checkbox": {"equals": True}}
+                ]
+            }
+        }
+    )
+
+    for page in response["results"]:
+        page_id = page["id"]
+        try:
+            notion.pages.update(page_id=page_id, properties={
+                "완료 여부": {"checkbox": False}
+            })
+            print(f"[DEBUG] ✅ {page_id} 완료 여부 초기화 완료")
+        except Exception as e:
+            print(f"[ERROR] ❌ {page_id} 초기화 실패: {e}")
+
+def mark_reminder_sent(page_id, attempts=1):
+    now = datetime.datetime.now(KST).isoformat()
+    try:
+        notion.pages.update(page_id=page_id, properties={
+            "리마인드 시도 수": {"number": attempts},
+            "마지막 체크 시간": {"date": {"start": now}}
+        })
+        print(f"[DEBUG] 🕒 리마인더 전송 기록 업데이트 완료 for {page_id}")
+    except Exception as e:
+        print(f"[ERROR] ❌ 리마인더 기록 실패: {e}")
