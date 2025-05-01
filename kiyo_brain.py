@@ -4,6 +4,7 @@ import logging
 import discord
 from openai import AsyncOpenAI
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from midjourney_utils import send_midjourney_prompt
 from notion_utils import (
     fetch_recent_notion_summary,
@@ -17,8 +18,6 @@ from notion_utils import (
 import random
 import difflib
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 logging.basicConfig(level=logging.DEBUG)
 
