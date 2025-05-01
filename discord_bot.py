@@ -65,13 +65,8 @@ def extract_image_url_from_message(message):
     return None
 
 def is_upscaled_image(message):
-    upscale_keywords = ["Upscaled", "Image #", "U1", "U2", "U3", "U4"]
-    if any(keyword in message.content for keyword in upscale_keywords):
-        return True
-    for attachment in message.attachments:
-        if attachment.filename.endswith(".png") and "grid" not in attachment.filename:
-            return True
-    return False
+    # Midjourney 업스케일 메시지엔 보통 "Image #1" ~ "Image #4" 같은 표현이 들어감
+    return bool(re.search(r"Image\s+#\d", message.content))
 
 @client.event
 async def on_ready():
