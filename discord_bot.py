@@ -75,12 +75,24 @@ def is_upscaled_image(message):
 
 @client.event
 async def on_ready():
+    global scheduler_initialized
     print(f"[READY] Logged in as {client.user}")
-    try:
-        from scheduler import setup_scheduler
-        setup_scheduler(client, conversation_log, get_latest_image_url, clear_latest_image_url)
-    except Exception as e:
-        logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
+
+    if not scheduler_initialized:
+        try:
+            from scheduler import setup_scheduler
+            setup_scheduler(
+                client,
+                conversation_log,
+                get_latest_image_url,
+                clear_latest_image_url
+            )
+            scheduler_initialized = True
+            logging.info("[READY] 스케줄러 정상 초기화 완료")
+        except Exception as e:
+            logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
+    else:
+        logging.info("[READY] 스케줄러 이미 초기화됨, 재시도 생략")
 
 @client.event
 async def on_raw_message_edit(payload):
