@@ -6,10 +6,10 @@ import os
 import discord
 import random
 
-from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image
+from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image, generate_observation_log
 from notion_utils import detect_emotion, upload_to_notion
 
-# client, conversation_log, latest_image_getter를 받아서 스케줄러 초기화
+# client, conversation_log, latest_image_getter, clear_image_callback를 받아서 스케줄러 초기화
 def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_callback):
     async def send_kiyo_message(time_context):
         try:
@@ -39,7 +39,7 @@ def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_c
                     emotion = await detect_emotion(diary_text)
                     await upload_to_notion(diary_text, emotion_key=emotion, image_url=image_url)
                     logging.debug(f"[SCHEDULER] 일기 생성 및 업로드 완료 | 스타일: {chosen_style} | 이미지: {image_url}")
-                    clear_image_callback()  # 이미지 URL 초기화
+                    clear_image_callback()
                 else:
                     logging.warning("[SCHEDULER] 일기 생성 실패")
 
@@ -47,11 +47,21 @@ def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_c
         except Exception as e:
             logging.error(f"[ERROR] 일기 업로드 중 오류: {repr(e)}")
 
+    async def send_observation_log():
+        try:
+            logging.debug("[SCHEDULER] 관찰일지 생성 시작")
+            await generate_observation_log()
+            logging.debug("[SCHEDULER] 관찰일지 생성 완료")
+        except Exception as e:
+            logging.error(f"[ERROR] 관찰일지 생성 중 오류: {repr(e)}")
+
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("lunch")), CronTrigger(hour=12, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("evening")), CronTrigger(hour=18, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("night")), CronTrigger(hour=23, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_daily_summary()), CronTrigger(hour=2, minute=0))
+    scheduler.add_job(lambda: asyncio.create_task(send_observation_log()), CronTrigger(hour=3, minute=0))
 
+    logging.info("[SCHEDULER] 스케줄러 시작됨")
     scheduler.start()
