@@ -7,7 +7,7 @@ import discord
 import random
 
 from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image
-from notion_utils import detect_emotion, upload_to_notion, generate_observation_log
+from notion_utils import detect_emotion, upload_to_notion, generate_observation_log, reset_daily_todos
 
 # client, conversation_log, latest_image_getter, clear_image_callback를 받아서 스케줄러 초기화
 def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_callback):
@@ -60,6 +60,7 @@ def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_c
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("lunch")), CronTrigger(hour=12, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("evening")), CronTrigger(hour=18, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("night")), CronTrigger(hour=23, minute=0))
+    scheduler.add_job(lambda: reset_daily_todos(), CronTrigger(hour=0, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_daily_summary()), CronTrigger(hour=2, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_observation_log()), CronTrigger(hour=3, minute=0))
 
