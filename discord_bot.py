@@ -26,6 +26,7 @@ from notion_utils import (
     fetch_pending_todos, 
     mark_reminder_sent,
     update_task_completion
+    update_last_active
 )
 from initiate_checker import check_initiate_message
 
@@ -125,7 +126,7 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     if message.author.name == USER_DISCORD_NAME:
-        update_last_active(message.author.id)  # notion_utils.py의 함수
+        update_last_active()
     await bot.process_commands(message)
 
 @client.event
