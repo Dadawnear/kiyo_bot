@@ -14,7 +14,7 @@ from notion_utils import get_last_active, fetch_recent_conversation
 from dotenv import load_dotenv
 
 # === 설정 ===
-USER_DISCORD_NAME = os.getenv("USER_DISCORD_NAME")
+USER_ID = int(os.getenv("USER_ID"))
 KST = pytz.timezone('Asia/Seoul')
 
 # === 주기적 선톡 검사 ===
@@ -28,9 +28,9 @@ async def check_initiate_message(discord_client):
         return
 
     try:
-        user = discord.utils.get(discord_client.get_all_members(), name=TARGET_USERNAME)
+        user = await discord_client.fetch_user(USER_ID)
         if not user:
-            logging.warning(f"[선톡체크] 유저 '{TARGET_USERNAME}'를 찾을 수 없음")
+            logging.warning(f"[선톡체크] 유저를 찾을 수 없음")
             return
 
         last_active = get_last_active(user.id)
