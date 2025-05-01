@@ -10,12 +10,13 @@ from kiyo_brain import (
     fetch_recent_observation_entries,
     generate_kiyo_memory_summary
 )
-from notion_utils import get_last_active, fetch_recent_conversation
+from notion_utils import get_last_active, fetch_recent_conversation, fetch_recent_diary_entries
 from dotenv import load_dotenv
 
 # === 설정 ===
 USER_ID = int(os.getenv("USER_ID"))
 KST = pytz.timezone('Asia/Seoul')
+past_diary = fetch_recent_diary_entries(user.id)
 
 # === 주기적 선톡 검사 ===
 @tasks.loop(minutes=30)
@@ -58,6 +59,7 @@ async def check_initiate_message(discord_client):
         # 메시지 생성
         message = generate_initiate_message(
             gap_hours=gap_hours,
+            past_diary=past_diary,
             past_obs=past_obs,
             past_memories=past_memories,
             recent_chat=recent_chat
