@@ -9,7 +9,7 @@ import datetime
 import pytz
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 KST = pytz.timezone("Asia/Seoul")
 
@@ -78,6 +78,12 @@ async def detect_emotion(text):
     elif any(kw in text for kw in ["무기력", "비관"]):
         return "망상"
     return "기록"
+
+def parse_time_string(time_str: str):
+    try:
+        return datetime.strptime(time_str.strip(), "%H:%M").time()
+    except ValueError:
+        return None
 
 def get_latest_diary_page_id():
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
@@ -523,37 +529,42 @@ async def upload_memory_to_notion(original_text, summary, tags=[], category="기
         logging.info(f"[NOTION MEMORY] 저장 성공: {response.json().get('id')}")
 
 def fetch_pending_todos():
-    database_id = TODO_DATABASE_ID
-    now = datetime.datetime.now(KST)
-    today_weekday = now.strftime("%a")
-    today_iso = now.isoformat()
+    now = datetime.now(KST)
+    today_weekday = now.strftime("%a")  # 예: 'Mon'
+    current_time = now.time()
 
-    response = notion.databases.query(
-        **{
-            "database_id": database_id,
-            "filter": {
-                "and": [
-                    {"property": "완료 여부", "checkbox": {"equals": False}},
-                    {
-                        "or": [
-                            {"property": "반복", "select": {"equals": "없음"}},
-                            {"property": "반복", "select": {"equals": "매일"}},
-                            {
-                                "and": [
-                                    {"property": "반복", "select": {"equals": "매주"}},
-                                    {"property": "요일", "multi_select": {"contains": today_weekday}}
-                                ]
-                            }
-                        ]
-                    },
-                    {"property": "예정 시간", "date": {"on_or_before": today_iso}}
-                ]
-            }
+    response = notion.databases.query({
+        "database_id": TODO_DATABASE_ID,
+        "filter": {
+            "and": [
+                {"property": "완료 여부", "checkbox": {"equals": False}},
+                {
+                    "or": [
+                        {"property": "반복", "select": {"equals": "매일"}},
+                        {
+                            "and": [
+                                {"property": "반복", "select": {"equals": "매주"}},
+                                {"property": "요일", "multi_select": {"contains": today_weekday}}
+                            ]
+                        }
+                    ]
+                }
+            ]
         }
-    )
+    })
 
-    print(f"[DEBUG] 📋 {len(response['results'])}개의 미완료 할 일이 감지됨")
-    return response["results"]
+    valid_tasks = []
+    for page in response["results"]:
+        time_str = page["properties"].get("구체적인 시간", {}).get("rich_text", [])
+        if not time_str or not time_str[0]["plain_text"]:
+            continue
+
+        parsed_time = parse_time_string(time_str[0]["plain_text"])
+        if parsed_time and parsed_time <= current_time:
+            valid_tasks.append(page)
+
+    print(f"[DEBUG] ✅ {len(valid_tasks)}개의 할 일이 현재 시간 기준 조건을 충족함")
+    return valid_tasks
 
 def reset_daily_todos():
     database_id = TODO_DATABASE_ID
