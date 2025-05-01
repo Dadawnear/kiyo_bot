@@ -12,6 +12,8 @@ CHANNEL_ID = 987654321098765432  # 실제 채널 ID로 교체
 # 시간 설정
 KST = pytz.timezone('Asia/Seoul')
 
+last_active = get_last_active()
+
 @tasks.loop(minutes=30)
 async def check_initiate_message():
     now = datetime.now(KST)
