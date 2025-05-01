@@ -372,8 +372,6 @@ def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, re
     else:
         tone = "감정적으로 멀어진 분위기, 그러나 말투는 고요하고 내려앉음"
 
-    recent_chat = "" #더미값
-
     prompt = f'''
 신구지 코레키요가 디스코드에서 유저에게 먼저 말을 건다.
 유저는 {gap_hours:.0f}시간 동안 아무 말도 하지 않았다.
@@ -401,7 +399,11 @@ def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, re
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}]
     )
-    return response['choices'][0]['message']['content'].strip()
+    try:
+        return response['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        logging.error(f"[선톡 메시지 생성 오류] 응답 파싱 실패: {repr(e)}")
+        return "..."  # 예외 시 기본 메시지
 
 
 # 외부에서 import할 수 있도록 alias는 맨 마지막에 정의
