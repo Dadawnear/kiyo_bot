@@ -604,12 +604,13 @@ def fetch_pending_todos():
     return valid_tasks
 
 def reset_daily_todos():
-    response = notion.databases.query(
-        database_id=TODO_DATABASE_ID,
-        # 조건 1: 매일 반복
+    now = datetime.now(KST)
+    today_weekday = now.strftime("%a")
+
+    # 조건 1: 매일 반복
     daily_filter = {"property": "반복", "select": {"equals": "매일"}}
 
-    # 조건 2: 매주 반복 + 오늘 요일 포함 (조건부 생성)
+    # 조건 2: 매주 반복 + 오늘 요일 포함
     weekly_filter = {
         "and": [
             {"property": "반복", "select": {"equals": "매주"}},
@@ -617,18 +618,21 @@ def reset_daily_todos():
         ]
     }
 
-    # 요일 유효할 때만 or 조건에 포함
     filter_or_conditions = [daily_filter, weekly_filter]
 
-    response = notion.databases.query(
-        database_id=TODO_DATABASE_ID,
-        filter={
-            "and": [
-                {"property": "완료 여부", "checkbox": {"equals": False}},
-                {"or": filter_or_conditions}
-            ]
-        }
-    )
+    try:
+        response = notion.databases.query(
+            database_id=TODO_DATABASE_ID,
+            filter={
+                "and": [
+                    {"property": "완료 여부", "checkbox": {"equals": True}},  # 완료된 항목만 초기화
+                    {"or": filter_or_conditions}
+                ]
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] ❌ 필터 쿼리 실패: {e}")
+        return
 
     for page in response["results"]:
         page_id = page["id"]
@@ -639,6 +643,7 @@ def reset_daily_todos():
             print(f"[DEBUG] ✅ {page_id} 완료 여부 초기화 완료")
         except Exception as e:
             print(f"[ERROR] ❌ {page_id} 초기화 실패: {e}")
+
 
 def mark_reminder_sent(page_id, attempts=1):
     now = datetime.datetime.now(KST).isoformat()
