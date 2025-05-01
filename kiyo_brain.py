@@ -380,12 +380,6 @@ def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, re
 
 톤 가이드: {tone}
 
-최근 대화 요약:
-{recent_chat}
-
-신구지의 최근 일기:
-{past_diary}
-
 관찰일지 기록:
 {past_obs}
 
