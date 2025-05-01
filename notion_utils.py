@@ -607,17 +607,14 @@ def reset_daily_todos():
     now = datetime.now(KST)
     today_weekday = now.strftime("%a")
 
-    # 조건 1: 매일 반복
+    # 조건 조립
     daily_filter = {"property": "반복", "select": {"equals": "매일"}}
-
-    # 조건 2: 매주 반복 + 오늘 요일 포함
     weekly_filter = {
         "and": [
             {"property": "반복", "select": {"equals": "매주"}},
             {"property": "요일", "multi_select": {"contains": today_weekday}}
         ]
     }
-
     filter_or_conditions = [daily_filter, weekly_filter]
 
     try:
@@ -625,7 +622,7 @@ def reset_daily_todos():
             database_id=TODO_DATABASE_ID,
             filter={
                 "and": [
-                    {"property": "완료 여부", "checkbox": {"equals": True}},  # 완료된 항목만 초기화
+                    {"property": "완료 여부", "checkbox": {"equals": True}},
                     {"or": filter_or_conditions}
                 ]
             }
@@ -640,6 +637,7 @@ def reset_daily_todos():
                 print(f"[DEBUG] ✅ {page_id} 완료 여부 초기화 완료")
             except Exception as e:
                 print(f"[ERROR] ❌ {page_id} 초기화 실패: {e}")
+
     except Exception as e:
         print(f"[ERROR] ❌ 필터 쿼리 실패: {e}")
             
