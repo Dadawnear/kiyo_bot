@@ -541,43 +541,66 @@ async def upload_memory_to_notion(original_text, summary, tags=[], category="기
     else:
         logging.info(f"[NOTION MEMORY] 저장 성공: {response.json().get('id')}")
 
+from datetime import datetime
+import pytz
+
+KST = pytz.timezone("Asia/Seoul")
+
+def parse_time_string(time_str: str):
+    try:
+        return datetime.strptime(time_str.strip(), "%H:%M").time()
+    except ValueError:
+        return None
+
 def fetch_pending_todos():
     now = datetime.now(KST)
-    today_weekday = now.strftime("%a")
+    today_weekday = now.strftime("%a")  # 'Mon', 'Tue', ...
     current_time = now.time()
 
-    response = notion.databases.query(
-        database_id=TODO_DATABASE_ID,
-        filter={
-            "and": [
-                {"property": "완료 여부", "checkbox": {"equals": False}},
-                {
-                    "or": [
-                        {"property": "반복", "select": {"equals": "매일"}},
-                        {
-                            "and": [
-                                {"property": "반복", "select": {"equals": "매주"}},
-                                {"property": "요일", "multi_select": {"contains": today_weekday}}
-                            ]
-                        }
-                    ]
-                }
-            ]
-        }
-    )
-    
+    # 필터 조건 조립
+    filter_or_conditions = []
+
+    # 반복 = 매일 조건은 항상 추가
+    filter_or_conditions.append({"property": "반복", "select": {"equals": "매일"}})
+
+    # 반복 = 매주 조건 + 요일이 지정되어 있을 때만 추가
+    weekly_filter = {
+        "and": [
+            {"property": "반복", "select": {"equals": "매주"}},
+            {"property": "요일", "multi_select": {"contains": today_weekday}}
+        ]
+    }
+    filter_or_conditions.append(weekly_filter)
+
+    # 쿼리 실행
+    try:
+        response = notion.databases.query(
+            database_id=TODO_DATABASE_ID,
+            filter={
+                "and": [
+                    {"property": "완료 여부", "checkbox": {"equals": False}},
+                    {"or": filter_or_conditions}
+                ]
+            }
+        )
+    except Exception as e:
+        print(f"[ERROR] ❌ 필터 쿼리 실패: {e}")
+        return []
+
     valid_tasks = []
     for page in response["results"]:
+        title = page["properties"]["할 일"]["title"][0]["plain_text"]
         time_str = page["properties"].get("구체적인 시간", {}).get("rich_text", [])
         parsed_time = None
+
         if time_str and time_str[0]["plain_text"]:
             parsed_time = parse_time_string(time_str[0]["plain_text"])
 
-        # 구체적인 시간이 비었거나 유효하지 않은 경우 → 시간대만 가지고 통과
         if parsed_time is None or parsed_time <= current_time:
             valid_tasks.append(page)
+            print(f"[DEBUG] ✅ '{title}' 리마인더 조건 충족")
 
-    print(f"[DEBUG] ✅ {len(valid_tasks)}개의 할 일이 현재 시간 기준 조건을 충족함")
+    print(f"[INFO] 🔍 총 {len(valid_tasks)}개의 할 일 감지됨")
     return valid_tasks
 
 def reset_daily_todos():
