@@ -6,8 +6,8 @@ import os
 import discord
 import random
 
-from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image, generate_observation_log
-from notion_utils import detect_emotion, upload_to_notion
+from kiyo_brain import generate_kiyo_message_with_time, generate_diary_and_image
+from notion_utils import detect_emotion, upload_to_notion, generate_observation_log
 
 # client, conversation_log, latest_image_getter, clear_image_callback를 받아서 스케줄러 초기화
 def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_callback):
