@@ -2,7 +2,7 @@ import discord
 from discord.ext import tasks
 from datetime import datetime, timedelta
 import pytz
-from kiyo_brain import generate_initiate_message, fetch_recent_conversation, fetch_recent_diary, fetch_recent_observations, fetch_recent_memories
+from kiyo_brain import generate_initiate_message, fetch_recent_diary, fetch_recent_observations, fetch_recent_memories
 from notion_utils import get_last_active, update_last_active
 
 # 유저 설정
