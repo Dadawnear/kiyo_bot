@@ -16,7 +16,9 @@ from notion_utils import (
     upload_memory_to_notion,
     get_last_diary_timestamp,
     update_diary_image,
-    get_latest_diary_page_id
+    get_latest_diary_page_id,
+    fetch_pending_todos, 
+    mark_reminder_sent
 )
 
 load_dotenv()
@@ -69,6 +71,34 @@ def is_upscaled_image(message):
     # Midjourney 업스케일 메시지엔 보통 "Image #1" ~ "Image #4" 같은 표현이 들어감
     return bool(re.search(r"Image\s+#\d", message.content))
 
+async def check_todo_reminders():
+    try:
+        logging.debug("[REMINDER] 할 일 리마인더 체크 시작")
+        todos = fetch_pending_todos()
+        user = discord.utils.get(client.users, name=USER_DISCORD_NAME)
+
+        for todo in todos:
+            task_name = todo['properties']['할 일']['title'][0]['plain_text']
+            page_id = todo['id']
+            attempts = todo['properties'].get('리마인드 시도 수', {}).get('number', 0) + 1
+
+            if user:
+                await user.send(f"크크… 오늘 네가 해야 할 일 중 하나는 이것이야:\n**{task_name}**\n…벌써 했는지는 모르겠지만, 난 확인하러 왔어.")
+                logging.debug(f"[REMINDER] ✅ '{task_name}'에 대한 리마인더 전송 완료")
+
+                mark_reminder_sent(page_id, attempts)
+            else:
+                logging.warning("[REMINDER] ❗ 대상 유저 찾을 수 없음")
+
+    except Exception as e:
+        logging.error(f"[REMINDER ERROR] 리마인더 전송 중 오류 발생: {repr(e)}")
+
+async def reminder_loop():
+    while True:
+        await check_todo_reminders()
+        await asyncio.sleep(3600)
+        
+
 @client.event
 async def on_ready():
     global scheduler_initialized
@@ -83,6 +113,7 @@ async def on_ready():
                 get_latest_image_url,
                 clear_latest_image_url
             )
+            client.loop.create_task(reminder_loop()) # 할 일 체크 루프 시작
             scheduler_initialized = True
             logging.info("[READY] 스케줄러 정상 초기화 완료")
         except Exception as e:
