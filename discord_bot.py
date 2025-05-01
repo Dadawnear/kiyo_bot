@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 import logging
 from dotenv import load_dotenv
-from kiyo_brain import generate_kiyo_message, generate_kiyo_memory_summary, generate_diary_and_image
+from kiyo_brain import generate_kiyo_message, generate_kiyo_memory_summary, generate_diary_and_image, generate_reminder_dialogue
 from notion_utils import (
     generate_diary_entry,
     upload_to_notion,
@@ -83,7 +83,8 @@ async def check_todo_reminders():
             attempts = todo['properties'].get('리마인드 시도 수', {}).get('number', 0) + 1
 
             if user:
-                await user.send(f"크크… 오늘 네가 해야 할 일 중 하나는 이것이야:\n**{task_name}**\n…벌써 했는지는 모르겠지만, 난 확인하러 왔어.")
+                reminder_text = await generate_reminder_dialogue(task_name)
+                await user.send(reminder_text)
                 logging.debug(f"[REMINDER] ✅ '{task_name}'에 대한 리마인더 전송 완료")
 
                 mark_reminder_sent(page_id, attempts)
