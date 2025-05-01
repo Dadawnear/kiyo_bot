@@ -334,10 +334,34 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
         page_id = await upload_to_notion(diary_text, emotion_key=emotion, image_url=latest_image_url)
         return diary_text, page_id  # ← 여기 중요
 
-
     except Exception as e:
         logging.error(f"[ERROR] generate_diary_and_image 실패: {repr(e)}")
         return None, None
+
+async def generate_reminder_dialogue(task_name: str) -> str:
+    prompt = (
+        f"사용자가 해야 할 일은 '{task_name}'이야. "
+        "이걸 신구지 코레키요가 대화하듯 자연스럽게, 매번 다른 말투로 알려주는 문장을 하나 만들어줘. "
+        "명령조보단 은근히 상기시키는 말투고, 말투는 민속학자의 분위기와 신구지 특유의 말버릇을 갖춰줘. "
+        "예: '오늘도 약 챙겨 먹는 거, 잊지 않았지…?' 같은 식으로. "
+        "대사는 한 문장만, 너무 길지 않게, 현실적인 톤으로 만들어줘."
+    )
+
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",  # 또는 gpt-4 / gpt-3.5 등 설정된 모델
+            messages=[
+                {"role": "system", "content": "너는 신구지 코레키요의 말투로 유저에게 말을 거는 디스코드 봇이야."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.9,
+            max_tokens=60
+        )
+        reply = response.choices[0].message.content.strip()
+        return reply
+    except Exception as e:
+        logging.error(f"[REMINDER GENERATION ERROR] {e}")
+        return f"{task_name}… 벌써 했으면 좋겠지만, 혹시 안 했다면 지금이라도."
 
 # 외부에서 import할 수 있도록 alias는 맨 마지막에 정의
 generate_kiyo_message_with_time = generate_kiyo_message
