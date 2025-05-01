@@ -4,3 +4,4 @@ python-dotenv
 discord.py
 apscheduler
 requests
+pytz
