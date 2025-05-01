@@ -10,6 +10,7 @@ import pytz
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from datetime import datetime, time, timedelta, timezone
+from notion_client import Client
 
 KST = pytz.timezone("Asia/Seoul")
 
@@ -23,6 +24,8 @@ NOTION_OBSERVATION_DB_ID = os.getenv("NOTION_OBSERVATION_DB_ID")
 NOTION_MEMORY_DB_ID = os.getenv("NOTION_MEMORY_DB_ID")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 TODO_DATABASE_ID = os.getenv("TODO_DATABASE_ID")
+
+notion = Client(auth=NOTION_TOKEN)
 
 intents = discord.Intents.default()
 intents.messages = True
