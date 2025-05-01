@@ -533,12 +533,12 @@ async def upload_memory_to_notion(original_text, summary, tags=[], category="기
 
 def fetch_pending_todos():
     now = datetime.now(KST)
-    today_weekday = now.strftime("%a")  # 예: 'Mon'
+    today_weekday = now.strftime("%a")
     current_time = now.time()
 
-    response = notion.databases.query({
-        "database_id": TODO_DATABASE_ID,
-        "filter": {
+    response = notion.databases.query(
+        database_id=TODO_DATABASE_ID,
+        filter={
             "and": [
                 {"property": "완료 여부", "checkbox": {"equals": False}},
                 {
@@ -554,8 +554,8 @@ def fetch_pending_todos():
                 }
             ]
         }
-    })
-
+    )
+    
     valid_tasks = []
     for page in response["results"]:
         time_str = page["properties"].get("구체적인 시간", {}).get("rich_text", [])
