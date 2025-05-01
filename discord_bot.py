@@ -90,9 +90,9 @@ async def on_ready():
             scheduler_initialized = True
             logging.info("[READY] 스케줄러 정상 초기화 완료")
         except Exception as e:
-            logging.error(f"[ERROR] 스케줄러 설정 중 오류: {repr(e)}")
+            logging.exception("[ERROR] 스케줄러 설정 중 치명적인 오류 발생:")
     else:
-        logging.info("[READY] 스케줄러 이미 초기화됨, 재시도 생략")
+        logging.info("[READY] 스케줄러 이미 초기화됨")
 
 @client.event
 async def on_raw_message_edit(payload):
