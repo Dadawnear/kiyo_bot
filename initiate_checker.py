@@ -1,57 +1,52 @@
-import discord
-from discord.ext import tasks
+import asyncio
 from datetime import datetime, timedelta
 import pytz
-from kiyo_brain import generate_initiate_message, fetch_recent_diary, fetch_recent_observations, fetch_recent_memories
-from notion_utils import get_last_active, update_last_active
+from discord import TextChannel
+from kiyo_brain import generate_korekiyo_response
+from notion_utils import fetch_recent_memories
 
-# 유저 설정
-USER_ID = 123456789012345678  # 실제 유저 ID로 교체
-CHANNEL_ID = 987654321098765432  # 실제 채널 ID로 교체
+# 이 함수는 디스코드 봇 인스턴스에서 주기적으로 호출되어야 함
+def should_initiate_conversation(last_user_message_time: datetime, now: datetime) -> bool:
+    # 유저가 보낸 마지막 메시지 이후 6시간 이상이 지나야 함
+    if not last_user_message_time:
+        return False
 
-# 시간 설정
-KST = pytz.timezone('Asia/Seoul')
+    elapsed = now - last_user_message_time
+    if elapsed < timedelta(hours=6):
+        return False
 
-last_active = get_last_active()
+    # 보낼 수 있는 시간대: 오전 11시 ~ 새벽 1시
+    if now.hour < 11 and now.hour >= 2:
+        return False
 
-@tasks.loop(minutes=30)
-async def check_initiate_message():
-    now = datetime.now(KST)
-    awake_start = now.replace(hour=11, minute=0, second=0, microsecond=0)
-    awake_end = (now + timedelta(days=1)).replace(hour=1, minute=0, second=0, microsecond=0)
+    return True
 
-    if not (awake_start <= now <= awake_end):
+
+async def check_and_initiate(client, user_id: int, channel_id: int, get_last_user_message_time):
+    channel: TextChannel = client.get_channel(channel_id)
+    if not channel:
+        print("[선톡] 채널을 찾을 수 없습니다.")
         return
 
-    last_active = get_last_active(USER_ID)
-    if not last_active:
-        return
+    # 현재 시간
+    now = datetime.now(pytz.timezone("Asia/Seoul"))
 
-    gap = now - last_active
-    gap_hours = gap.total_seconds() / 3600
+    # 마지막 유저 메시지 시간 받아오기
+    last_user_msg_time = await get_last_user_message_time(user_id)
 
-    if gap_hours < 12:
-        return  # 너무 짧은 공백은 무시
+    if should_initiate_conversation(last_user_msg_time, now):
+        print("[선톡] 조건 충족. 신구지가 먼저 말을 겁니다.")
 
-    # 과거 맥락 수집
-    recent_chat = fetch_recent_conversation(USER_ID)
-    past_diary = fetch_recent_diary()
-    past_obs = fetch_recent_observations()
-    past_memories = fetch_recent_memories()
+        # 최근 기억 불러오기
+        recent_memories = fetch_recent_memories(user_id=user_id)
 
-    # 메시지 생성
-    message = generate_initiate_message(
-        gap_hours=gap_hours,
-        past_diary=past_diary,
-        past_obs=past_obs,
-        past_memories=past_memories,
-        recent_chat=recent_chat
-    )
+        # 공백 시간 길이에 따라 감정 태도 조절
+        emotion_hint = "장시간 침묵" if (now - last_user_msg_time).total_seconds() > 36000 else "가벼운 걱정"
 
-    # 메시지 전송
-    channel = discord_client.get_channel(CHANNEL_ID)
-    if channel:
+        # 선톡 메시지 생성
+        prompt = f"유저가 오랜 시간 대화를 하지 않았어. '{emotion_hint}'이라는 감정을 바탕으로, 최근 기억을 반영해서 신구지가 먼저 자연스럽게 말을 거는 메시지를 작성해줘."
+        message = generate_korekiyo_response(prompt, recent_memories)
+
         await channel.send(message)
-
-# 디스코드 클라이언트는 main 파일에서 설정됨
-# check_initiate_message.start()는 봇 준비 완료 후 호출 필요
+    else:
+        print("[선톡] 조건 불충족. 아무 일도 하지 않습니다.")
