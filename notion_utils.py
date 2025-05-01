@@ -560,10 +560,8 @@ def fetch_pending_todos():
     # 필터 조건 조립
     filter_or_conditions = []
 
-    # 반복 = 매일 조건은 항상 추가
     filter_or_conditions.append({"property": "반복", "select": {"equals": "매일"}})
 
-    # 반복 = 매주 조건 + 요일이 지정되어 있을 때만 추가
     if today_weekday:
         weekly = {
             "and": [
@@ -573,20 +571,22 @@ def fetch_pending_todos():
         }
         filter_or_conditions.append(weekly)
 
-    # 쿼리 실행
-    response = notion.databases.query(
-        database_id=TODO_DATABASE_ID,
-        filter={
-            "and": [
-                {"property": "완료 여부", "checkbox": {"equals": False}},
-                {"or": filter_or_conditions}
-            ]
-        }
-    )
+    try:
+        # ✅ 이 부분을 try 안으로 이동
+        response = notion.databases.query(
+            database_id=TODO_DATABASE_ID,
+            filter={
+                "and": [
+                    {"property": "완료 여부", "checkbox": {"equals": False}},
+                    {"or": filter_or_conditions}
+                ]
+            }
+        )
     except Exception as e:
         print(f"[ERROR] ❌ 필터 쿼리 실패: {e}")
         return []
 
+    # 나머지 처리
     valid_tasks = []
     for page in response["results"]:
         title = page["properties"]["할 일"]["title"][0]["plain_text"]
@@ -622,12 +622,11 @@ def reset_daily_todos():
             database_id=TODO_DATABASE_ID,
             filter={
                 "and": [
-                    {"property": "완료 여부", "checkbox": {"equals": True}},
+                    {"property": "완료 여부", "checkbox": {"equals": False}},
                     {"or": filter_or_conditions}
                 ]
             }
         )
-
         for page in response["results"]:
             page_id = page["id"]
             try:
