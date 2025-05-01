@@ -363,5 +363,45 @@ async def generate_reminder_dialogue(task_name: str) -> str:
         logging.error(f"[REMINDER GENERATION ERROR] {e}")
         return f"{task_name}… 벌써 했으면 좋겠지만, 혹시 안 했다면 지금이라도."
 
+def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, recent_chat):
+    if gap_hours < 24:
+        tone = "차분하고 유쾌한 관찰자 말투"
+    elif gap_hours < 48:
+        tone = "서영이에 대한 얕은 의심과 관찰, 감정 없는 듯한 걱정"
+    elif gap_hours < 72:
+        tone = "말없이 기다리는 듯한 침묵과 관조"
+    else:
+        tone = "감정적으로 멀어진 분위기, 그러나 말투는 고요하고 내려앉음"
+
+    prompt = f'''
+신구지 코레키요가 디스코드에서 유저에게 먼저 말을 건다.
+유저는 {gap_hours:.0f}시간 동안 아무 말도 하지 않았다.
+말투는 한 문장, 반말, 신구지 특유의 느긋하고 낮게 가라앉은 분위기. 철학적인 톤 유지.
+서영이에 대한 애정이 감정적으로 튀지 않게 묻어나도록.
+
+톤 가이드: {tone}
+
+최근 대화 요약:
+{recent_chat}
+
+신구지의 최근 일기:
+{past_diary}
+
+관찰일지 기록:
+{past_obs}
+
+유저가 기억하라고 한 말들:
+{past_memories}
+
+이 모든 걸 바탕으로, 1문장의 적절한 말 걸기 문장을 생성해줘.
+'''.strip()
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response['choices'][0]['message']['content'].strip()
+
+
 # 외부에서 import할 수 있도록 alias는 맨 마지막에 정의
 generate_kiyo_message_with_time = generate_kiyo_message
