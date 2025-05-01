@@ -600,3 +600,12 @@ def mark_reminder_sent(page_id, attempts=1):
         print(f"[DEBUG] 🕒 리마인더 전송 기록 업데이트 완료 for {page_id}")
     except Exception as e:
         print(f"[ERROR] ❌ 리마인더 기록 실패: {e}")
+
+def update_task_completion(page_id, done=True):
+    try:
+        notion.pages.update(page_id=page_id, properties={
+            "완료 여부": {"checkbox": done}
+        })
+        logging.debug(f"[NOTION] ✅ 완료 여부 업데이트됨 (page: {page_id})")
+    except Exception as e:
+        logging.error(f"[NOTION] ❌ 완료 여부 업데이트 실패: {repr(e)}")
