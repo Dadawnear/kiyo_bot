@@ -1,52 +1,80 @@
-import asyncio
+import discord
+from discord.ext import tasks
 from datetime import datetime, timedelta
 import pytz
-from discord import TextChannel
-from kiyo_brain import generate_korekiyo_response
-from notion_utils import fetch_recent_memories
+import os
+import logging
 
-# 이 함수는 디스코드 봇 인스턴스에서 주기적으로 호출되어야 함
-def should_initiate_conversation(last_user_message_time: datetime, now: datetime) -> bool:
-    # 유저가 보낸 마지막 메시지 이후 6시간 이상이 지나야 함
-    if not last_user_message_time:
-        return False
+from kiyo_brain import (
+    generate_initiate_message,
+    fetch_recent_observation_entries,
+    generate_kiyo_memory_summary
+)
+from notion_utils import get_last_active, fetch_recent_conversation
+from dotenv import load_dotenv
 
-    elapsed = now - last_user_message_time
-    if elapsed < timedelta(hours=6):
-        return False
+# === 설정 ===
+USER_DISCORD_NAME = os.getenv("USER_DISCORD_NAME")
+KST = pytz.timezone('Asia/Seoul')
 
-    # 보낼 수 있는 시간대: 오전 11시 ~ 새벽 1시
-    if now.hour < 11 and now.hour >= 2:
-        return False
+# === 주기적 선톡 검사 ===
+@tasks.loop(minutes=30)
+async def check_initiate_message(discord_client):
+    now = datetime.now(KST)
+    logging.debug(f"[선톡체크] 현재 시각: {now}")
 
-    return True
-
-
-async def check_and_initiate(client, user_id: int, channel_id: int, get_last_user_message_time):
-    channel: TextChannel = client.get_channel(channel_id)
-    if not channel:
-        print("[선톡] 채널을 찾을 수 없습니다.")
+    if not (now.hour >= 11 or now.hour <= 1):  # 11시~새벽 1시 사이가 아니면 종료
+        logging.debug("[선톡체크] 현재는 선톡 허용 시간대가 아님")
         return
 
-    # 현재 시간
-    now = datetime.now(pytz.timezone("Asia/Seoul"))
+    try:
+        user = discord.utils.get(discord_client.get_all_members(), name=TARGET_USERNAME)
+        if not user:
+            logging.warning(f"[선톡체크] 유저 '{TARGET_USERNAME}'를 찾을 수 없음")
+            return
 
-    # 마지막 유저 메시지 시간 받아오기
-    last_user_msg_time = await get_last_user_message_time(user_id)
+        last_active = get_last_active(user.id)
+        logging.debug(f"[선톡체크] 마지막 유저 활동 시각: {last_active}")
 
-    if should_initiate_conversation(last_user_msg_time, now):
-        print("[선톡] 조건 충족. 신구지가 먼저 말을 겁니다.")
+        if not last_active:
+            logging.debug("[선톡체크] 마지막 활동 기록이 없음")
+            return
 
-        # 최근 기억 불러오기
-        recent_memories = fetch_recent_memories(user_id=user_id)
+        gap = now - last_active
+        gap_hours = gap.total_seconds() / 3600
+        logging.debug(f"[선톡체크] 공백 시간: {gap_hours:.2f}시간")
 
-        # 공백 시간 길이에 따라 감정 태도 조절
-        emotion_hint = "장시간 침묵" if (now - last_user_msg_time).total_seconds() > 36000 else "가벼운 걱정"
+        if gap_hours < 12:
+            logging.debug("[선톡체크] 공백 시간이 12시간 미만이라 무시")
+            return
 
-        # 선톡 메시지 생성
-        prompt = f"유저가 오랜 시간 대화를 하지 않았어. '{emotion_hint}'이라는 감정을 바탕으로, 최근 기억을 반영해서 신구지가 먼저 자연스럽게 말을 거는 메시지를 작성해줘."
-        message = generate_korekiyo_response(prompt, recent_memories)
+        # 과거 맥락 수집
+        logging.debug("[선톡체크] 과거 맥락 수집 시작")
+        recent_chat = fetch_recent_conversation(user.id)
+        past_obs = fetch_recent_observation_entries(user.id)
+        past_memories = generate_kiyo_memory_summary(user.id)
+        logging.debug("[선톡체크] 과거 맥락 수집 완료")
 
-        await channel.send(message)
-    else:
-        print("[선톡] 조건 불충족. 아무 일도 하지 않습니다.")
+        # 메시지 생성
+        message = generate_initiate_message(
+            gap_hours=gap_hours,
+            past_obs=past_obs,
+            past_memories=past_memories,
+            recent_chat=recent_chat
+        )
+        logging.debug(f"[선톡체크] 생성된 메시지: {message}")
+
+        # 메시지 전송
+        user = await discord_client.fetch_user(USER_ID)
+        if user:
+            dm_channel = await user.create_dm()
+            await dm_channel.send(message)
+            logging.info("[선톡체크] DM 메시지 전송 완료")
+        else:
+            logging.warning("[선톡체크] 유저를 찾을 수 없음")
+
+
+    except Exception as e:
+        logging.error(f"[선톡체크] 오류 발생: {repr(e)}")
+
+# check_initiate_message.start()는 봇 준비 이후에 main에서 호출해줘야 함
