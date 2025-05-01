@@ -372,6 +372,8 @@ def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, re
     else:
         tone = "감정적으로 멀어진 분위기, 그러나 말투는 고요하고 내려앉음"
 
+    recent_chat = "" #더미값
+
     prompt = f'''
 신구지 코레키요가 디스코드에서 유저에게 먼저 말을 건다.
 유저는 {gap_hours:.0f}시간 동안 아무 말도 하지 않았다.
