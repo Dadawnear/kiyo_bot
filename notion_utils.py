@@ -559,11 +559,12 @@ def fetch_pending_todos():
     valid_tasks = []
     for page in response["results"]:
         time_str = page["properties"].get("구체적인 시간", {}).get("rich_text", [])
-        if not time_str or not time_str[0]["plain_text"]:
-            continue
+        parsed_time = None
+        if time_str and time_str[0]["plain_text"]:
+            parsed_time = parse_time_string(time_str[0]["plain_text"])
 
-        parsed_time = parse_time_string(time_str[0]["plain_text"])
-        if parsed_time and parsed_time <= current_time:
+        # 구체적인 시간이 비었거나 유효하지 않은 경우 → 시간대만 가지고 통과
+        if parsed_time is None or parsed_time <= current_time:
             valid_tasks.append(page)
 
     print(f"[DEBUG] ✅ {len(valid_tasks)}개의 할 일이 현재 시간 기준 조건을 충족함")
