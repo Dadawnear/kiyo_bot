@@ -3,10 +3,16 @@ import os
 import discord
 import asyncio
 import re
-from datetime import datetime, timezone
 import logging
+import pytz
+from datetime import datetime, timezone
 from dotenv import load_dotenv
-from kiyo_brain import generate_kiyo_message, generate_kiyo_memory_summary, generate_diary_and_image, generate_reminder_dialogue
+from kiyo_brain import (
+    generate_kiyo_message, 
+    generate_kiyo_memory_summary, 
+    generate_diary_and_image, 
+    generate_reminder_dialogue
+)
 from notion_utils import (
     generate_diary_entry,
     upload_to_notion,
@@ -18,7 +24,8 @@ from notion_utils import (
     update_diary_image,
     get_latest_diary_page_id,
     fetch_pending_todos, 
-    mark_reminder_sent
+    mark_reminder_sent,
+    update_task_completion
 )
 
 load_dotenv()
@@ -82,17 +89,17 @@ async def check_todo_reminders():
             page_id = todo['id']
             attempts = todo['properties'].get('리마인드 시도 수', {}).get('number', 0) + 1
 
+            reminder_text = await generate_reminder_dialogue(task_name)
+
             if user:
-                reminder_text = await generate_reminder_dialogue(task_name)
                 await user.send(reminder_text)
                 logging.debug(f"[REMINDER] ✅ '{task_name}'에 대한 리마인더 전송 완료")
-
                 mark_reminder_sent(page_id, attempts)
             else:
                 logging.warning("[REMINDER] ❗ 대상 유저 찾을 수 없음")
 
     except Exception as e:
-        logging.error(f"[REMINDER ERROR] 리마인더 전송 중 오류 발생: {repr(e)}")
+        logging.error(f"[REMINDER ERROR] ❌ 리마인더 전송 중 오류: {repr(e)}")
 
 async def reminder_loop():
     while True:
@@ -228,6 +235,21 @@ async def on_message(message):
             logging.error(f"[ERROR] 관찰 기록 생성 오류: {repr(e)}")
             await message.channel.send("크크… 관찰 일지를 지금은 쓸 수 없네.")
         return
+
+    if any(word in message.content.lower() for word in ["했어", "완료했어", "끝냈어"]):
+        try:
+            now = datetime.now(pytz.timezone("Asia/Seoul")).time()
+            todos = fetch_pending_todos()
+            for todo in todos:
+                page_id = todo['id']
+                task_name = todo['properties']['할 일']['title'][0]['plain_text']
+                if not todo['properties']['완료 여부']['checkbox']:
+                    await update_task_completion(page_id, True)
+                    await message.channel.send(f"크크… '{task_name}' 확인했어. 잘했어.")
+                    logging.debug(f"[TODO COMPLETE] ✅ '{task_name}' 자동 완료 체크됨")
+                    break  # 가장 먼저 매칭된 한 건만 처리
+        except Exception as e:
+            logging.error(f"[AUTO COMPLETE ERROR] ❌ 완료 체크 중 오류: {repr(e)}")
 
     if any(keyword in message.content for keyword in ["기억해", "기억해줘", "잊지 마", "기억할래", "기억 좀"]):
         try:
