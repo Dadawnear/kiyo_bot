@@ -1,6 +1,7 @@
 import asyncio
 import os
-from discord_bot import start_discord_bot
+from discord_bot import start_discord_bot, get_last_user_message_time
+from initiate_checker import check_initiate_message
 from aiohttp import web
 
 os.environ["TZ"] = "Asia/Seoul"
@@ -25,6 +26,11 @@ async def start_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"Web server running on port {port}")
+
+# 선톡 루프 설정
+async def loop_initiate_checker():
+    await bot.wait_until_ready()
+    await check_initiate_message(bot, USER_ID, get_last_user_message_time)
 
 # 메인 실행
 async def main():
