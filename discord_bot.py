@@ -50,6 +50,7 @@ last_midjourney_message = {}
 conversation_log = []
 latest_midjourney_image_url = None
 last_created_diary_page_id = None
+last_user_active_time = None
 scheduler_initialized = False
 logging.debug("[REMINDER CONTEXT] 초기화 완료")
 recent_reminder_context = {
@@ -117,6 +118,13 @@ async def reminder_loop():
     while True:
         await check_todo_reminders()
         await asyncio.sleep(600)
+
+def update_last_active():
+    global last_user_active_time
+    last_user_active_time = datetime.now(pytz.timezone("Asia/Seoul"))
+
+async def get_last_user_message_time(user_id: int):
+    return last_user_active_time
 
 @bot.event
 async def on_ready():
