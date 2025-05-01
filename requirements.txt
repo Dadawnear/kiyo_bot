@@ -5,3 +5,4 @@ discord.py
 apscheduler
 requests
 pytz
+notion-client
