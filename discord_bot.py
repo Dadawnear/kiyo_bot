@@ -49,6 +49,7 @@ conversation_log = []
 latest_midjourney_image_url = None
 last_created_diary_page_id = None
 scheduler_initialized = False
+logging.debug("[REMINDER CONTEXT] 초기화 완료")
 recent_reminder_context = {
     "task_name": None,
     "page_id": None,
