@@ -10,13 +10,11 @@ from kiyo_brain import (
     fetch_recent_observation_entries,
     generate_kiyo_memory_summary
 )
-from notion_utils import get_last_active, fetch_recent_conversation, fetch_recent_diary_entries
 from dotenv import load_dotenv
 
 # === 설정 ===
 USER_ID = int(os.getenv("USER_ID"))
 KST = pytz.timezone('Asia/Seoul')
-past_diary = fetch_recent_diary_entries(user.id)
 
 # === 주기적 선톡 검사 ===
 @tasks.loop(minutes=30)
@@ -34,7 +32,7 @@ async def check_initiate_message(discord_client):
             logging.warning(f"[선톡체크] 유저를 찾을 수 없음")
             return
 
-        last_active = get_last_active(user.id)
+        last_active = (user.id)
         logging.debug(f"[선톡체크] 마지막 유저 활동 시각: {last_active}")
 
         if not last_active:
@@ -51,7 +49,6 @@ async def check_initiate_message(discord_client):
 
         # 과거 맥락 수집
         logging.debug("[선톡체크] 과거 맥락 수집 시작")
-        recent_chat = fetch_recent_conversation(user.id)
         past_obs = fetch_recent_observation_entries(user.id)
         past_memories = generate_kiyo_memory_summary(user.id)
         logging.debug("[선톡체크] 과거 맥락 수집 완료")
@@ -59,10 +56,8 @@ async def check_initiate_message(discord_client):
         # 메시지 생성
         message = generate_initiate_message(
             gap_hours=gap_hours,
-            past_diary=past_diary,
-            past_obs=past_obs,
             past_memories=past_memories,
-            recent_chat=recent_chat
+            past_obs=past_obs
         )
         logging.debug(f"[선톡체크] 생성된 메시지: {message}")
 
