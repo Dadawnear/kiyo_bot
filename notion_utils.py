@@ -625,24 +625,23 @@ def reset_daily_todos():
             database_id=TODO_DATABASE_ID,
             filter={
                 "and": [
-                    {"property": "완료 여부", "checkbox": {"equals": True}},  # 완료된 것만 리셋
+                    {"property": "완료 여부", "checkbox": {"equals": True}},  # 완료된 항목만 초기화
                     {"or": filter_or_conditions}
                 ]
             }
         )
+
+        for page in response["results"]:
+            page_id = page["id"]
+            try:
+                notion.pages.update(page_id=page_id, properties={
+                    "완료 여부": {"checkbox": False}
+                })
+                print(f"[DEBUG] ✅ {page_id} 완료 여부 초기화 완료")
+            except Exception as e:
+                print(f"[ERROR] ❌ {page_id} 초기화 실패: {e}")
     except Exception as e:
         print(f"[ERROR] ❌ 필터 쿼리 실패: {e}")
-        return
-
-    for page in response["results"]:
-        page_id = page["id"]
-        try:
-            notion.pages.update(page_id=page_id, properties={
-                "완료 여부": {"checkbox": False}
-            })
-            print(f"[DEBUG] ✅ {page_id} 완료 여부 초기화 완료")
-        except Exception as e:
-            print(f"[ERROR] ❌ {page_id} 초기화 실패: {e}")
             
 
 def mark_reminder_sent(page_id, attempts=1):
