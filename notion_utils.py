@@ -570,19 +570,25 @@ def fetch_pending_todos():
     return valid_tasks
 
 def reset_daily_todos():
-    database_id = TODO_DATABASE_ID
     response = notion.databases.query(
-        **{
-            "database_id": database_id,
-            "filter": {
-                "and": [
-                    {"property": "반복", "select": {"equals": "매일"}},
-                    {"property": "완료 여부", "checkbox": {"equals": True}}
-                ]
-            }
+        database_id=TODO_DATABASE_ID,
+        filter={
+            "and": [
+                {"property": "완료 여부", "checkbox": {"equals": False}},
+                {
+                    "or": [
+                        {"property": "반복", "select": {"equals": "매일"}},
+                        {
+                            "and": [
+                                {"property": "반복", "select": {"equals": "매주"}},
+                                {"property": "요일", "multi_select": {"contains": today_weekday}}
+                            ]
+                        }
+                    ]
+                }
+            ]
         }
     )
-
     for page in response["results"]:
         page_id = page["id"]
         try:
