@@ -114,7 +114,7 @@ async def check_todo_reminders():
 async def reminder_loop():
     while True:
         await check_todo_reminders()
-        await asyncio.sleep(3600)
+        await asyncio.sleep(600)
         
 
 @client.event
