@@ -104,7 +104,6 @@ async def check_todo_reminders():
             reminder_text = await generate_reminder_dialogue(task_name)
 
             if user:
-                await user.send(reminder_text)
                 logging.debug(f"[REMINDER] ✅ '{task_name}'에 대한 리마인더 전송 완료")
                 mark_reminder_sent(page_id, attempts)
                 msg = await user.send(reminder_text)
