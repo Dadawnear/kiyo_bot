@@ -11,6 +11,7 @@ from kiyo_brain import (
     generate_kiyo_memory_summary
 )
 from notion_utils import get_last_active
+from discord_bot import get_last_user_message_time
 from dotenv import load_dotenv
 
 # === 설정 ===
