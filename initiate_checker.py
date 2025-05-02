@@ -10,7 +10,7 @@ from kiyo_brain import (
     fetch_recent_observation_entries,
     generate_kiyo_memory_summary
 )
-from notion_utils import get_last_active
+from discord_bot import get_last_active
 from dotenv import load_dotenv
 
 # === 설정 ===
