@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 # === 설정 ===
 USER_ID = int(os.getenv("USER_ID"))
 KST = pytz.timezone('Asia/Seoul')
-last_active = get_last_active()
 
 # === 주기적 선톡 검사 ===
 @tasks.loop(minutes=30)
@@ -34,7 +33,7 @@ async def check_initiate_message(discord_client):
             logging.warning(f"[선톡체크] 유저를 찾을 수 없음")
             return
 
-        last_active = await get_last_user_message_time(user_id)
+        last_active = get_last_active()
         logging.debug(f"[선톡체크] 마지막 유저 활동 시각: {last_active}")
 
         if not last_active:
