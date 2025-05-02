@@ -69,7 +69,7 @@ def is_target_user(message):
     return str(message.author) == USER_DISCORD_NAME
 
 def get_virtual_diary_date():
-    return datetime.now()
+    return datetime.now(KST)
 
 async def detect_emotion(text):
     if any(kw in text for kw in ["외롭", "쓸쓸", "우울"]):
@@ -247,7 +247,7 @@ async def generate_observation_tags(observation_text: str) -> list:
 async def generate_observation_log(conversation_log):
     logging.debug("[OBSERVATION] generate_observation_log 시작")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(KST)
     today_logs = [
         f"{speaker}: {content}" for speaker, content in conversation_log
         if isinstance(content, str) and len(content.strip()) > 0
