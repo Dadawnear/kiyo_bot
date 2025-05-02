@@ -1,6 +1,7 @@
 openai
 aiohttp
 python-dotenv
+python-dateutil>=2.8.2
 discord.py
 apscheduler
 requests
