@@ -308,6 +308,23 @@ async def on_message(message):
             logging.error(f"[AUTO COMPLETE ERROR] ❌ 완료 체크 중 오류: {repr(e)}")
         return  # 더 이상 처리하지 않음
 
+        # 이미지 메시지 감지
+    if message.attachments:
+        for attachment in message.attachments:
+            if attachment.content_type and "image" in attachment.content_type:
+                image_url = attachment.url
+                logging.debug(f"[이미지 감지] URL: {image_url}")
+                try:
+                    from kiyo_brain import generate_kiyo_response_from_image
+                    response = await generate_kiyo_response_from_image(image_url, message.content)
+                    conversation_log.append(("キヨ", response, message.channel.id))
+                    await message.channel.send(response)
+                    return
+                except Exception as e:
+                    logging.error(f"[ERROR] 이미지 응답 생성 실패: {e}")
+                    await message.channel.send("그건… 눈으로만 받아들일 수 없는 감정 같아. 조금만 더 생각해볼게.")
+                    return
+
     # 그 외 일반 메시지: 신구지 응답 생성
     if not message.content.strip():
         return
