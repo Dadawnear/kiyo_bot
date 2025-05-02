@@ -15,7 +15,7 @@ from kiyo_brain import (
     generate_kiyo_memory_summary, 
     generate_diary_and_image, 
     generate_reminder_dialogue,
-    generate_timeblock_reminder
+    generate_timeblock_reminder_gpt
 )
 from notion_utils import (
     generate_diary_entry,
