@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from kiyo_brain import (
     generate_kiyo_message, 
-    generate_kiyo_response_from_image
+    generate_kiyo_response_from_image,
     generate_kiyo_memory_summary, 
     generate_diary_and_image, 
     generate_reminder_dialogue
@@ -28,7 +28,7 @@ from notion_utils import (
     get_latest_diary_page_id,
     fetch_pending_todos, 
     mark_reminder_sent,
-    update_task_completion,
+    update_task_completion
 )
 from active_tracker import update_last_active
 from initiate_checker import check_initiate_message
