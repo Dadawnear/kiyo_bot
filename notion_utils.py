@@ -642,7 +642,7 @@ def reset_daily_todos():
             
 
 def mark_reminder_sent(page_id, attempts=1):
-    now = datetime.datetime.now(KST).isoformat()
+    now = datetime.now(KST).isoformat()
     try:
         notion.pages.update(page_id=page_id, properties={
             "리마인드 시도 수": {"number": attempts},
