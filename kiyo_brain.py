@@ -38,6 +38,8 @@ now = datetime.now(ZoneInfo("Asia/Seoul"))
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+LAST_TIMEBLOCK_SENT = {} 
+
 USER_NAMES = ["정서영", "서영", "너"]
 
 EXAMPLE_LINES = [
