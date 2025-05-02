@@ -29,7 +29,6 @@ from notion_utils import (
     get_latest_diary_page_id,
     fetch_pending_todos, 
     group_todos_by_timeblock,
-    generate_timeblock_reminder_gpt,
     mark_reminder_sent,
     update_task_completion
 )
