@@ -157,6 +157,44 @@ async def fetch_recent_observation_entries(limit=10):
         logging.error(f"[NOTION OBS FETCH ERROR] {repr(e)}")
         return "관찰 기록을 불러오는 중 오류가 발생했어."
 
+async def build_kiyo_context(user_text: str = "") -> str:
+    try:
+        # 감정 분석
+        emotion = await detect_emotion(user_text)
+        logging.debug(f"[CONTEXT] 감정 분석 결과: {emotion}")
+
+        # 최근 기억
+        memory_context = await fetch_recent_memories(limit=3)
+        memory_text = "\n- ".join(memory_context) if memory_context else "기억 없음"
+        logging.debug(f"[CONTEXT] 최근 기억: {memory_text}")
+
+        # 날씨
+        weather = await get_current_weather_desc()
+        logging.debug(f"[CONTEXT] 현재 날씨: {weather}")
+
+        # 말투 톤 지시
+        tone_map = {
+            "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 말해.",
+            "분노": "냉소적이고 날카로운 말투로, 단호하게 말해.",
+            "혼란": "천천히 말하며, 유도 질문처럼 끝내라.",
+            "애정": "집요함을 눌러 담아, 낮은 톤으로 조용히 말해.",
+            "혐오": "냉정하고 거리를 두며, 의도를 감춘 말투로.",
+            "중립": "신구지 특유의 침착하고 분석적인 말투로."
+        }
+        tone_instruction = tone_map.get(emotion, "신구지 특유의 침착하고 분석적인 말투로.")
+
+        context = (
+            f"유저는 지금 '{emotion}' 상태고, 최근 기억은 다음과 같아:\n- {memory_text}\n\n"
+            f"현재 날씨는 '{weather}'야. 그 분위기에 어울리는 어조로 말해.\n"
+            f"{tone_instruction}"
+        )
+
+        return context
+    except Exception as e:
+        logging.error(f"[ERROR] build_kiyo_context 실패: {e}")
+        return "유저의 감정과 기억, 날씨는 알 수 없어. 신구지 코레키요답게만 말해."
+        
+
 async def generate_face_to_face_response(conversation_log):
     try:
         logging.debug("[DEBUG] generate_face_to_face_response 실행")
@@ -397,29 +435,41 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
 
 async def generate_timeblock_reminder_gpt(timeblock: str, todos: list[str]) -> str:
     task_preview = ", ".join(todos[:5]) + (" 외 몇 가지" if len(todos) > 5 else "")
-    prompt = (
-        f"지금은 '{timeblock}' 시간이야. 유저가 해야 할 일은 다음과 같아: {task_list}. "
-        "신구지 코레키요는 단간론파 V3의 민속학자 캐릭터야. 이걸 그의 말투로, 하지만 너무 문어체나 '의식'같은 단어는 쓰지 않고, "
-        "대화체로 현실적인 톤으로 리마인드해줘. 마치 평소처럼 은근히 떠보듯 말하거나, 넌지시 상기시키듯 말하면 돼. "
-        "말투는 조금 집요하고 조용하고, 약간 느릿한 감정선이 있어야 해. 따옴표는 쓰지 마. 명령조는 아니어야 하고, 한 문장만 줘."
-    )
+    user_text = " ".join(todos)
 
     try:
+        context = await build_kiyo_context(user_text)
+
+        prompt = (
+            f"{context}\n\n"
+            f"지금은 '{timeblock}' 시간이야. 유저가 해야 할 일은 다음과 같아: {task_preview}. "
+            f"이걸 마치 신구지 코레키요가 대화 중 흘리듯, 은근하게 한 문장으로 상기시키는 방식으로 말해. "
+            f"절대 명령하지 말고, 따옴표 없이, 나열하지 말고. 반드시 두 문장을 넘지 마."
+        )
+
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "너는 신구지 코레키요의 말투로 유저에게 하루의 일정에 대해 넌지시 리마인드하는 AI야."},
+                {
+                    "role": "system",
+                    "content": (
+                        "너는 단간론파 V3의 신구지 코레키요처럼 말하는 디스코드 봇이야. "
+                        "은근하고 조용하고, 집요한 감정선이 느껴져야 해."
+                    )
+                },
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.9,
-            max_tokens=150
+            temperature=0.85,
+            max_tokens=80
         )
+
         reply = response.choices[0].message.content.strip()
         logging.debug(f"[DEBUG] 📣 GPT 리마인드 응답:\n{reply}")
         return reply
+
     except Exception as e:
         logging.error(f"[REMINDER GENERATION ERROR] {e}")
-        return f"{timeblock} 시간이라면… 아마 {task_list} 같은 것들이 걸려 있었겠지."
+        return f"{timeblock} 시간이라면… 아마 {task_preview} 같은 것들이 걸려 있었겠지."
     
 
 async def generate_reminder_dialogue(task_name: str) -> str:
