@@ -56,6 +56,7 @@ def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_c
             logging.error(f"[ERROR] 관찰일지 생성 중 오류: {repr(e)}")
 
     scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
+    loop = asyncio.get_event_loop() 
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("morning")), CronTrigger(hour=9, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("lunch")), CronTrigger(hour=12, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_kiyo_message("evening")), CronTrigger(hour=18, minute=0))
