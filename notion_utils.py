@@ -493,11 +493,11 @@ def get_last_diary_timestamp():
     response = requests.post(url, headers=HEADERS, json=data)
     if response.status_code != 200:
         logging.error(f"[NOTION ERROR] 최근 일기 타임스탬프 가져오기 실패: {response.text}")
-        return datetime.now(timezone.utc)
+        return datetime.now(KST)
 
     results = response.json().get("results", [])
     if not results:
-        return datetime.now(timezone.utc)
+        return datetime.now(KST)
 
     try:
         last_page = results[0]
@@ -505,10 +505,10 @@ def get_last_diary_timestamp():
         return datetime.fromisoformat(last_date)
     except Exception as e:
         logging.error(f"[NOTION ERROR] 타임스탬프 파싱 실패: {repr(e)}")
-        return datetime.now(timezone.utc)
+        return datetime.now(KST)
 
 async def upload_memory_to_notion(original_text, summary, tags=[], category="기억", status="기억 중", message_url=None):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(KST)
     iso_date = now.strftime("%Y-%m-%d")
 
     data = {
