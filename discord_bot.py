@@ -48,7 +48,6 @@ intents.members = True
 intents.dm_messages = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-client = discord.Client(intents=intents)
 last_midjourney_message = {}
 conversation_log = []
 latest_midjourney_image_url = None
@@ -93,7 +92,7 @@ async def check_todo_reminders():
     try:
         logging.debug("[REMINDER] 할 일 리마인더 체크 시작")
         todos = fetch_pending_todos()
-        user = discord.utils.get(client.users, name=USER_DISCORD_NAME)
+        user = discord.utils.get(bot.users, name=USER_DISCORD_NAME)
 
         for todo in todos:
             task_name = todo['properties']['할 일']['title'][0]['plain_text']
@@ -134,22 +133,22 @@ def is_affirmative_confirmation(text: str) -> bool:
 @bot.event
 async def on_ready():
     try:
-        logging.info(f'Logged in as {client.user}')
+        logging.info(f'Logged in as {bot.user}')
         if not check_initiate_message.is_running():
-            check_initiate_message.start(client)  
+            check_initiate_message.start(bot)  
         global scheduler_initialized
-        print(f"[READY] Logged in as {client.user}")
+        print(f"[READY] Logged in as {bot.user}")
     
         if not scheduler_initialized:
             try:
                 from scheduler import setup_scheduler
                 setup_scheduler(
-                    client,
+                    bot,
                     conversation_log,
                     get_latest_image_url,
                     clear_latest_image_url
                 )
-                client.loop.create_task(reminder_loop()) # 할 일 체크 루프 시작
+                bot.loop.create_task(reminder_loop()) # 할 일 체크 루프 시작
                 scheduler_initialized = True
                 logging.info("[READY] 스케줄러 정상 초기화 완료")
             except Exception as e:
@@ -225,7 +224,7 @@ async def on_message(message):
         limit = int(match.group(1)) if match and match.group(1).isdigit() else 1
         deleted = 0
         async for msg in message.channel.history(limit=limit + 20):
-            if msg.author == client.user:
+            if msg.author == bot.user:
                 await msg.delete()
                 deleted += 1
                 if deleted >= limit:
@@ -245,7 +244,7 @@ async def on_message(message):
             style = match.group(1) if match else "full_diary"
 
             filtered_log = [(entry[0], entry[1]) for entry in conversation_log if len(entry) >= 2]  # ← 기존엔 entry[:2] 식으로 위험한 언팩 사용
-            diary_text, _ = await generate_diary_and_image(filtered_log, client, style=style, latest_image_url=None)
+            diary_text, _ = await generate_diary_and_image(filtered_log, bot, style=style, latest_image_url=None)
 
             if diary_text:
                 emotion = await detect_emotion(diary_text)
