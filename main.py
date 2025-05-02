@@ -1,6 +1,6 @@
 import asyncio
 import os
-from discord_bot import start_discord_bot, get_last_user_message_time
+from discord_bot import start_discord_bot
 from initiate_checker import check_initiate_message
 from aiohttp import web
 
