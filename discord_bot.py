@@ -99,7 +99,8 @@ async def check_todo_reminders():
         for todo in todos:
             task_name = todo['properties']['할 일']['title'][0]['plain_text']
             page_id = todo['id']
-            attempts = todo['properties'].get('리마인드 시도 수', {}).get('number', 0) + 1
+            raw_attempts = todo['properties'].get('리마인드 시도 수', {}).get('number')
+            attempts = (raw_attempts if isinstance(raw_attempts, (int, float)) else 0) + 1
 
             reminder_text = await generate_reminder_dialogue(task_name)
 
