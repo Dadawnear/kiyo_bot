@@ -133,11 +133,6 @@ def is_affirmative_confirmation(text: str) -> bool:
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user} is now online.')
-    check_initiate_message.start()  # 신구지 먼저 말 걸기 루프 시작
-
-@client.event
-async def on_ready():
     try:
         logging.info(f'Logged in as {client.user}')
         if not check_initiate_message.is_running():
@@ -165,7 +160,7 @@ async def on_ready():
     except Exception as e:
         logging.exception(f"[ERROR] on_ready 내부 오류 발생: {repr(e)}")
 
-@client.event
+@bot.event
 async def on_raw_message_edit(payload):
     data = payload.data
     if "attachments" in data and len(data["attachments"]) > 0:
@@ -173,7 +168,7 @@ async def on_raw_message_edit(payload):
         if last_created_diary_page_id:
             await update_diary_image(last_created_diary_page_id, image_url)
 
-@client.event
+@bot.event
 async def on_raw_message_delete(payload):
     deleted_message_id = payload.message_id
     if deleted_message_id in last_midjourney_message:
@@ -334,4 +329,4 @@ async def on_message(message):
         await message.channel.send("크크… 내가 지금은 응답을 만들 수 없어. 하지만 함수엔 잘 들어왔어.")
 
 async def start_discord_bot():
-    await client.start(DISCORD_BOT_TOKEN)
+    await bot.start(DISCORD_BOT_TOKEN)
