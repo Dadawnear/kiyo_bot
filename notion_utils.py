@@ -572,13 +572,23 @@ def fetch_pending_todos():
         filter_or_conditions.append(weekly)
 
     try:
-        # ✅ 이 부분을 try 안으로 이동
         response = notion.databases.query(
             database_id=TODO_DATABASE_ID,
             filter={
-                "and": [
-                    {"property": "완료 여부", "checkbox": {"equals": False}},
-                    {"or": filter_or_conditions}
+                "or": [
+                    {
+                        "and": [
+                            {"property": "완료 여부", "checkbox": {"equals": False}},
+                            {"property": "반복", "select": {"equals": "매일"}}
+                        ]
+                    },
+                    {
+                        "and": [
+                            {"property": "완료 여부", "checkbox": {"equals": False}},
+                            {"property": "반복", "select": {"equals": "매주"}},
+                            {"property": "요일", "multi_select": {"contains": today_weekday}}
+                        ]
+                    }
                 ]
             }
         )
