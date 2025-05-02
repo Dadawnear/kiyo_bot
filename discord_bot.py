@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from kiyo_brain import (
     generate_kiyo_message, 
+    generate_kiyo_response_from_image
     generate_kiyo_memory_summary, 
     generate_diary_and_image, 
     generate_reminder_dialogue
