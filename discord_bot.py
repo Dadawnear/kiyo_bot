@@ -14,7 +14,8 @@ from kiyo_brain import (
     generate_kiyo_response_from_image,
     generate_kiyo_memory_summary, 
     generate_diary_and_image, 
-    generate_reminder_dialogue
+    generate_reminder_dialogue,
+    generate_timeblock_reminder
 )
 from notion_utils import (
     generate_diary_entry,
@@ -27,6 +28,8 @@ from notion_utils import (
     update_diary_image,
     get_latest_diary_page_id,
     fetch_pending_todos, 
+    group_todos_by_timeblock,
+    generate_timeblock_reminder_gpt,
     mark_reminder_sent,
     update_task_completion
 )
@@ -60,6 +63,9 @@ recent_reminder_context = {
     "page_id": None,
     "message_id": None
 }
+
+# 아침 또는 밤일 때
+reminder_text = await generate_timeblock_reminder_gpt(timeblock, grouped[timeblock])
 
 def get_latest_image_url():
     return latest_midjourney_image_url
@@ -115,6 +121,26 @@ async def check_todo_reminders():
 
     except Exception as e:
         logging.error(f"[REMINDER ERROR] ❌ 리마인더 전송 중 오류: {repr(e)}")
+
+async def send_timeblock_reminder(bot):
+    now = datetime.now(KST)
+    hour = now.hour
+
+    # 시간대 진입 조건 (예: 아침 9시 또는 밤 21시)
+    if hour not in [9, 21]:
+        return
+
+    todos = fetch_pending_todos()
+    grouped = group_todos_by_timeblock(todos)
+
+    timeblock = "아침" if hour == 9 else "밤"
+    if timeblock in grouped:
+        reminder_text = generate_timeblock_reminder(timeblock, grouped[timeblock])
+        logging.debug(f"[DEBUG] 📣 시간대 리마인드 메시지 생성 완료:\n{reminder_text}")
+
+        user = await find_user(client, USER_DISCORD_NAME)
+        if user:
+            await user.send(reminder_text)
 
 async def reminder_loop():
     while True:
