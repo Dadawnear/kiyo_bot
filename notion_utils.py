@@ -652,7 +652,7 @@ def mark_reminder_sent(page_id, attempts=1):
     except Exception as e:
         print(f"[ERROR] ❌ 리마인더 기록 실패: {e}")
 
-def update_task_completion(page_id, done=True):
+async def update_task_completion(page_id, is_done):
     try:
         notion.pages.update(page_id=page_id, properties={
             "완료 여부": {"checkbox": done}
