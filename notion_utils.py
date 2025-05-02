@@ -671,7 +671,7 @@ def mark_reminder_sent(page_id, attempts=1):
 async def update_task_completion(page_id, is_done):
     try:
         notion.pages.update(page_id=page_id, properties={
-            "완료 여부": {"checkbox": done}
+            "완료 여부": {"checkbox": is_done}
         })
         logging.debug(f"[NOTION] ✅ 완료 여부 업데이트됨 (page: {page_id})")
     except Exception as e:
