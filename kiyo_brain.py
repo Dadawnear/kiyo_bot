@@ -467,7 +467,7 @@ async def generate_reminder_dialogue(task_name: str) -> str:
         logging.error(f"[REMINDER GENERATION ERROR] {e}")
         return f"{task_name}… 아직 안 했으면, 지금이라도 해두는 게 좋지 않을까."
 
-def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, recent_chat):
+async def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, recent_chat):
     if gap_hours < 24:
         tone = "차분하고 유쾌한 관찰자 말투"
     elif gap_hours < 48:
@@ -494,7 +494,7 @@ def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, re
 이 모든 걸 바탕으로, 1문장의 적절한 말 걸기 문장을 생성해줘.
 '''.strip()
 
-    response = await openai.ChatCompletion.create(
+    response = await openai_client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}]
     )
