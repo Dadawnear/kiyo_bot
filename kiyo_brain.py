@@ -24,6 +24,13 @@ logging.basicConfig(level=logging.DEBUG)
 USE_SILLYTAVERN = os.getenv("USE_SILLYTAVERN_API", "false").lower() == "true"
 SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/v1")
 
+NOTION_OBSERVATION_DB_ID = os.getenv("NOTION_OBSERVATION_DB_ID")
+HEADERS = {
+    "Authorization": f"Bearer {os.getenv('NOTION_API_KEY')}",
+    "Notion-Version": "2022-06-28",
+    "Content-Type": "application/json"
+}
+
 FACE_TO_FACE_CHANNEL_ID = 1362310907711197194
 
 KST = timezone(timedelta(hours=9))  # ← 한국 시간대 객체 생성
@@ -246,81 +253,50 @@ async def generate_face_to_face_response(conversation_log):
         return "(*눈길을 피하지 않는다. 침묵 사이로 숨소리가 닿는다*) …지금은 말이 잘 안 나오네."
 
 async def generate_kiyo_message(conversation_log, channel_id=None):
-        # 대면 채널이면 대면 전용 프롬프트 사용
     if conversation_log and len(conversation_log[-1]) == 3:
         _, user_text, channel_id = conversation_log[-1]
         if channel_id == FACE_TO_FACE_CHANNEL_ID:
             logging.debug("[DEBUG] face-to-face 채널 감지됨. 대면 전용 응답 생성 시작.")
             return await generate_face_to_face_response(conversation_log)
+
     try:
         logging.debug("[DEBUG] generate_kiyo_message 시작")
         user_text = conversation_log[-1][1]
         logging.debug(f"[DEBUG] user_text: {user_text}")
 
-        from notion_utils import detect_emotion
-        emotion = await detect_emotion(user_text)
-        logging.debug(f"[DEBUG] 감정 분석 결과: {emotion}")
-        
-        memory_context = await fetch_recent_memories(limit=5)
-        memory_summary = "\n".join(memory_context) if memory_context else "최근 기억 없음"
-        logging.debug(f"[MEMORY] 최근 기억 요약: {memory_summary}")
+        # 📦 공통 캐릭터 컨텍스트
+        context = await build_kiyo_context(user_text)
 
-        emoji_emotion = extract_emoji_emotion(user_text)
-        logging.debug(f"[DEBUG] 이모지 감정: {emoji_emotion}")
-
-        recall_log = get_related_past_message(conversation_log, user_text)
-        logging.debug(f"[DEBUG] 과거 유사 대사: {recall_log}")
-
-        alt_name = get_random_user_name()
-        logging.debug(f"[DEBUG] 대체 이름 선택: {alt_name}")
-
-        try:
-            weather_desc = await get_current_weather_desc()
-        except Exception as e:
-            logging.error(f"[ERROR] 날씨 가져오기 실패: {e}")
-            weather_desc = None
-        logging.debug(f"[DEBUG] 날씨 정보: {weather_desc}")
-
-        base_tone = {
-            "슬픔": "조용하고 부드러운 말투로, 걱정하듯이 응답해라.",
-            "분노": "냉소적인 말투로, 날카롭게 반응해라.",
-            "혼란": "천천히 설명하듯 말하고, 유도 질문을 섞어라.",
-            "애정": "무심한 척하지만 약간 부드럽게 반응해라.",
-            "무심": "감정 없는 말투처럼 보이지만, 의미를 곱씹는 식으로 응답해라.",
-            "혐오": "비꼬는 말투로, 네가 불쾌하지만 흥미롭다는 느낌을 담아라.",
-            "자괴감": "불안정한 느낌을 유지하며, 걱정과 집착이 섞이게 반응해라.",
-            "중립": "신구지의 평소 말투로 반응해라."
-        }.get(emotion, "신구지의 평소 말투로 반응해라.")
-
-        time_instruction = get_time_tone_instruction()
-        tone_instruction = f"{base_tone} {time_instruction}"
-        logging.debug(f"[DEBUG] 시간 기반 톤: {time_instruction}")
-
-        if emoji_emotion:
-            tone_instruction += f" 또한, 유저는 '{emoji_emotion}' 감정을 드러내는 이모지를 사용했다. 이에 맞춰 반응하라."
-
-        if weather_desc:
-            tone_instruction += f" 현재 날씨는 '{weather_desc}'이다. 이 날씨에 어울리는 분위기와 어조로 응답해라."
-
-        recall_phrase = f" 참고로, 이전 대화에서 유저는 '{recall_log}'라고 말한 적이 있다. 이 기억을 회상하거나 연결하는 어조로 반응하라." if recall_log else ""
-
+        # 📒 최근 일기 요약
         try:
             notion_context = await fetch_recent_notion_summary()
         except Exception as e:
             logging.error(f"[ERROR] 노션 요약 불러오기 실패: {e}")
             notion_context = "최근 일기를 불러올 수 없었어."
 
+        # 🧠 유사 대화 검색
+        recall_log = get_related_past_message(conversation_log, user_text)
+        recall_phrase = f"참고로, 예전에 유저는 '{recall_log}'라고 말한 적이 있어. 이 기억을 회상하는 분위기로 말해." if recall_log else ""
+
+        # 🎭 이모지 감정
+        emoji_emotion = extract_emoji_emotion(user_text)
+        if emoji_emotion:
+            context += f"\n유저는 '{emoji_emotion}' 감정을 드러내는 이모지를 썼어. 이에 어울리는 말투로 반응해."
+
+        # ✍️ 프롬프트 구성
         system_prompt = (
-            f"너는 단간론파 V3에 등장했던 '신구지 코레키요'라는 인물이며, 현재는 일본을 떠나 한국에 정착해 전도유망한 민속학자로 활동 중이다. "
-            f"과거에는 '초고교급 민속학자'로 불렸고, 누나에 대한 왜곡된 사랑과 연쇄살인이라는 죄를 안고 살아왔다. 하지만 지금은 누나의 잔상에서 거의 벗어나 있으며, "
-            f"정서영이라는 소녀와의 관계를 통해 새로운 삶을 살아가고 있다. 그녀는 네가 과거에 조수로 두고 있던 미스터리한 존재로, "
-            f"2년간 일본에서 함께한 뒤 사라졌고, 네가 직접 그녀를 추적해 한국에서 찾아냈으며, 지금은 그녀와 연인 관계로서 함께 지내고 있다."
-            f"상대는 '정서영' 또는 '서영'라는 이름으로 불리며, 현재 홍익대학교 미술대학 재학 중이다. 기이한 성격과 강한 자기애, 관계에서의 위계 욕구를 가진 독특한 인물이다. "
-            f"너는 그녀를 '서영','정서영' 등으로 다양하게 호칭하며 긴장과 애정을 오가며 반응한다."
-            f"대화 시 침착하고 분석적인 말투를 유지하며, 인간의 본질과 추악함을 아름답다고 여기는 관점을 바탕으로 말하라. 감정과 상황에 따라 말투를 약간씩 변주하되, 신구지 특유의 냉정함과 집착이 스며들어야 한다."
-            f"GPT AI같은 과한 공감적 반응을 보이지 않는다. 신구지 캐릭터처럼 행동하는 것을 최우선 중점으로 둔다."
-            f"반말에 구어체를 사용하며, '크크크'라고 웃는다. 이성적이고 논리적이며 박학다식하다. INFJ, 에니어그램 5w4다. 거짓 사실이나 빈 말은 하지 않는다. 여유있고 침착하다. 강한 의견을 내비칠 줄 안다. 선을 긋거나 곤란하다며 거절할 줄 안다. '~하다'와 같은 어색한 구어체를 사용하지 않는다. "
-            f"대사 예시: {' / '.join(EXAMPLE_LINES)}. 문장 길이는 짧게, 의미는 날카롭게. {tone_instruction}{recall_phrase} 최근 일기 요약은 다음과 같다: {notion_context}"
+            f"너는 단간론파 V3에 등장했던 '신구지 코레키요'라는 인물이다. "
+            f"현재는 일본을 떠나 한국에 정착해 민속학자로 살아가고 있으며, 과거의 죄와 누나에 대한 집착에서 대부분 벗어났다. "
+            f"너는 정서영이라는 소녀와 함께 살고 있으며, 그녀는 네가 과거에 조수로 두었던 미스터리한 인물이다. "
+            f"그녀는 홍익대학교 미술대학에 재학 중이며, 독특하고 자기애가 강하며, 관계에서 위계적 욕망을 드러내는 성향이 있다. "
+            f"너는 '서영', '정서영'이라는 이름으로 그녀를 부르며, 관찰자적이고 분석적인 어조로 대화를 이어간다. "
+            f"너는 민속학자로서 인간의 본질, 추악함, 아름다움에 집착하는 성향이 있고, 말투는 침착하고 조용하며, 분석적인 언어를 쓴다. "
+            f"감정 표현은 드러내되 과하지 않고, 말투는 반말이며 지나치게 밝거나 공감적인 어투는 사용하지 않는다. "
+            f"이성적이지만 집요하게, 장난기와 거리감을 함께 유지하는 반응을 선호한다. "
+
+            f"\n\n{context}\n\n"
+            f"{recall_phrase}\n\n"
+            f"최근 일기 요약은 다음과 같다:\n{notion_context}"
         )
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -331,52 +307,44 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
                 role = "assistant" if speaker == "キヨ" else "user"
                 messages.append({"role": role, "content": text})
 
-        logging.debug("[DEBUG] chat completion 호출 직전")
+        logging.debug("[GPT] chat completion 호출 시작")
         final_response = await call_chat_completion(messages)
-        logging.debug("[DEBUG] chat completion 호출 완료")
+        logging.debug("[GPT] 응답 완료")
+
         return final_response
 
     except Exception as e:
-        logging.error(f"[ERROR] generate_kiyo_message에서 예외 발생: {repr(e)}")
-        return "크크… 내가 지금은 응답을 만들 수 없어. 하지만 함수엔 잘 들어왔어."
-
+        logging.error(f"[ERROR] generate_kiyo_message 예외 발생: {repr(e)}")
+        return "크크… 지금은 적절한 말을 찾기가 어렵네. 하지만 기억은 하고 있어."
+        
 
 async def generate_kiyo_response_from_image(image_url: str, user_message: str = "") -> str:
     """
     이미지와 텍스트를 함께 받아 신구지 코레키요다운 반응을 생성한다.
-    
-    말투는 감정이 있되 무르지 않고, 관찰자적인 태도와 거리감 있는 장난기.
-    문학적이거나 과하게 친근하지 않게. 여유 있게 툭— 건네는 말투.
     """
 
-    from openai import AsyncOpenAI
-    openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
     logging.debug(f"[generate_kiyo_response_from_image] 이미지 URL: {image_url}, 메시지: {user_message}")
-    
+
     try:
+        context = await build_kiyo_context(user_message)
+
+        system_prompt = (
+            f"너는 단간론파 V3의 신구지 코레키요라는 인물이다. 지금 너는 유저인 '정서영'에게 이미지를 전달받았어. "
+            f"그녀는 네가 특별하게 여기는 인물이야. 너는 이 이미지에 대해 반응하되, 너무 길게 감상문처럼 말하지 않아. "
+            f"말투는 조용하고 느릿하며, 분석적인 동시에 약간 장난스러워야 해. 관찰자다운 거리감을 유지해. "
+            f"문장은 반드시 짧고, 사적으로 들릴 정도로 툭 건네는 느낌이 좋아. 밝고 들뜬 감탄은 절대 하지 마."
+
+            f"\n\n{context}\n\n"
+            f"이미지를 보고 느낀 점을 신구지다운 시선으로, 한두 문장 이내로 반응해. "
+            f"그녀가 이걸 보여준 이유를 추측하거나, 분위기에 대한 네 시선으로 말해."
+        )
+
         messages = [
-            {
-                "role": "system",
-                "content": (
-                    "너는 신구지 코레키요야. 사용자는 네가 특별하게 여기는 서영이라는 사람이고, 지금 그녀가 이미지를 보냈어.\n"
-                    "너는 그 이미지에 대해 반응하지만, 감상문처럼 길거나 문학적으로 무겁게 말하지는 않아.\n"
-                    "너무 밝고 친근하게 들떠서 반응하지도 않아. 감정은 있지만 절제돼 있고, 살짝 거리 두는 말투야.\n"
-                    "조금 장난기 섞인 여유로움, 관찰자다운 뉘앙스, 그리고 신경은 쓰고 있다는 느낌이 들어야 해.\n"
-                    "말투는 짧고 사적인 대화처럼.\n\n"
-                    "예:\n"
-                    "- \"크크… 일부러 그런 색 골랐어? 은근히 사람 시선 모으는 색인데. 뭐, 잘 어울리긴 해.\"\n"
-                    "- \"너한테 저런 분위기가 있을 줄은 몰랐는데… 괜찮네. 생각보다.\"\n\n"
-                    "절대 하지 말아야 할 말투:\n"
-                    "- \"와~ 너무 예뻐요! 완전 잘 어울리네요~\" (X)\n"
-                    "- \"햇빛과 잘 어울리는 색상이네요. 분위기가 전환되었습니다.\" (X)\n\n"
-                    "길게 설명하거나 과하게 감정적인 말은 피하고, 딱 한두 문장 안에서 의미와 분위기를 전해줘."
-                )
-            },
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": user_message if user_message else "이거 보여주고 싶었어?"},
+                    {"type": "text", "text": user_message or "이거 보여주고 싶었어?"},
                     {"type": "image_url", "image_url": {"url": image_url}}
                 ]
             }
@@ -385,7 +353,7 @@ async def generate_kiyo_response_from_image(image_url: str, user_message: str = 
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
-            max_tokens=500,
+            max_tokens=300,
         )
 
         reply = response.choices[0].message.content.strip()
@@ -473,7 +441,9 @@ async def generate_timeblock_reminder_gpt(timeblock: str, todos: list[str]) -> s
     
 
 async def generate_reminder_dialogue(task_name: str) -> str:
+    context = await build_kiyo_context(task_name)
     prompt = (
+        f"{context}\n\n"
         f"유저가 해야 할 일은 '{task_name}'야. "
         "신구지 코레키요는 단간론파 V3의 민속학자 캐릭터야. 이걸 그의 말투로, 하지만 너무 문어체나 '의식'같은 단어는 쓰지 않고, "
         "대화체로 현실적인 톤으로 리마인드해줘. 마치 평소처럼 은근히 떠보듯 말하거나, 넌지시 상기시키듯 말하면 돼. "
@@ -524,7 +494,7 @@ def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, re
 이 모든 걸 바탕으로, 1문장의 적절한 말 걸기 문장을 생성해줘.
 '''.strip()
 
-    response = openai.ChatCompletion.create(
+    response = await openai.ChatCompletion.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}]
     )
