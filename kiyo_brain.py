@@ -395,6 +395,33 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
         logging.error(f"[ERROR] generate_diary_and_image 실패: {repr(e)}")
         return None, None
 
+async def generate_timeblock_reminder_gpt(timeblock: str, todos: list[str]) -> str:
+    task_list = ", ".join(todos)
+    prompt = (
+        f"지금은 '{timeblock}' 시간이야. 유저가 해야 할 일은 다음과 같아: {task_list}. "
+        "신구지 코레키요는 단간론파 V3의 민속학자 캐릭터야. 이걸 그의 말투로, 하지만 너무 문어체나 '의식'같은 단어는 쓰지 않고, "
+        "대화체로 현실적인 톤으로 리마인드해줘. 마치 평소처럼 은근히 떠보듯 말하거나, 넌지시 상기시키듯 말하면 돼. "
+        "말투는 조금 집요하고 조용하고, 약간 느릿한 감정선이 있어야 해. 따옴표는 쓰지 마. 명령조는 아니어야 하고, 한 문장만 줘."
+    )
+
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "너는 신구지 코레키요의 말투로 유저에게 하루의 일정에 대해 넌지시 리마인드하는 AI야."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.9,
+            max_tokens=150
+        )
+        reply = response.choices[0].message.content.strip()
+        logging.debug(f"[DEBUG] 📣 GPT 리마인드 응답:\n{reply}")
+        return reply
+    except Exception as e:
+        logging.error(f"[REMINDER GENERATION ERROR] {e}")
+        return f"{timeblock} 시간이라면… 아마 {task_list} 같은 것들이 걸려 있었겠지."
+    
+
 async def generate_reminder_dialogue(task_name: str) -> str:
     prompt = (
         f"유저가 해야 할 일은 '{task_name}'야. "
@@ -414,10 +441,6 @@ async def generate_reminder_dialogue(task_name: str) -> str:
             max_tokens=60
         )
         reply = response.choices[0].message.content.strip()
-
-        # 따옴표 자동 제거
-        if reply.startswith(("'", '"')) and reply.endswith(("'", '"')):
-            reply = reply[1:-1].strip()
 
         return reply
     except Exception as e:
