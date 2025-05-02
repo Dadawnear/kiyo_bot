@@ -11,6 +11,7 @@ from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from datetime import datetime, time, timedelta, timezone
 from notion_client import Client
+from dateutil import parser
 
 KST = pytz.timezone("Asia/Seoul")
 
@@ -596,9 +597,14 @@ def fetch_pending_todos():
         if time_str and time_str[0]["plain_text"]:
             parsed_time = parse_time_string(time_str[0]["plain_text"])
 
-        if parsed_time is None or parsed_time <= current_time:
+        if parsed_time:
+            task_datetime = datetime.combine(now.date(), parsed_time, tzinfo=KST)
+            if task_datetime <= now:
+                valid_tasks.append(page)
+                print(f"[DEBUG] ✅ '{title}' 리마인더 조건 충족")
+        else:
             valid_tasks.append(page)
-            print(f"[DEBUG] ✅ '{title}' 리마인더 조건 충족")
+            print(f"[DEBUG] ✅ '{title}' 리마인더 조건 충족 (시간 없음)")
 
     print(f"[INFO] 🔍 총 {len(valid_tasks)}개의 할 일 감지됨")
     return valid_tasks
