@@ -28,7 +28,6 @@ from notion_utils import (
     fetch_pending_todos, 
     mark_reminder_sent,
     update_task_completion,
-    update_last_active
 )
 from initiate_checker import check_initiate_message
 
