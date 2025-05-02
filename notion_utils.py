@@ -37,9 +37,6 @@ intents.dm_messages = True
 client = discord.Client(intents=intents)
 conversation_log = []
 
-# 마지막 메시지 시각을 저장하는 단일 변수 (단일 유저 기준)
-last_active_time = None
-
 logging.basicConfig(level=logging.DEBUG)
 
 HEADERS = {
@@ -90,13 +87,6 @@ def parse_time_string(time_str: str):
         return datetime.strptime(time_str.strip(), "%H:%M").time()
     except ValueError:
         return None
-
-def update_last_active():
-    global last_active_time
-    last_active_time = datetime.now()
-
-def get_last_active():
-    return last_active_time
 
 def get_latest_diary_page_id():
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
