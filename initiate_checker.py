@@ -10,7 +10,7 @@ from kiyo_brain import (
     fetch_recent_observation_entries,
     generate_kiyo_memory_summary
 )
-from active_tracker import update_last_active
+from active_tracker import get_last_active
 from dotenv import load_dotenv
 
 # === 설정 ===
@@ -63,7 +63,6 @@ async def check_initiate_message(discord_client):
         logging.debug(f"[선톡체크] 생성된 메시지: {message}")
 
         # 메시지 전송
-        user = await discord_client.fetch_user(USER_ID)
         if user:
             dm_channel = await user.create_dm()
             await dm_channel.send(message)
