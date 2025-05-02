@@ -339,28 +339,32 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
 
 async def generate_reminder_dialogue(task_name: str) -> str:
     prompt = (
-        f"사용자가 해야 할 일은 '{task_name}'이야. "
-        "이걸 신구지 코레키요가 대화하듯 자연스럽게, 매번 다른 말투로 알려주는 문장을 하나 만들어줘. "
-        "명령조보단 은근히 상기시키는 말투고, 말투는 민속학자의 분위기와 신구지 특유의 말버릇을 갖춰줘. "
-        "예: '오늘도 약 챙겨 먹는 거, 잊지 않았지…?' 같은 식으로. "
-        "대사는 한 문장만, 너무 길지 않게, 현실적인 톤으로 만들어줘."
+        f"유저가 해야 할 일은 '{task_name}'야. "
+        "신구지 코레키요는 단간론파 V3의 민속학자 캐릭터야. 이걸 그의 말투로, 하지만 너무 문어체나 '의식'같은 단어는 쓰지 않고, "
+        "대화체로 현실적인 톤으로 리마인드해줘. 마치 평소처럼 은근히 떠보듯 말하거나, 넌지시 상기시키듯 말하면 돼. "
+        "말투는 조금 집요하고 조용하고, 약간 느릿한 감정선이 있어야 해. 따옴표는 쓰지 마. 명령조는 아니어야 하고, 한 문장만 줘."
     )
 
     try:
         response = await openai_client.chat.completions.create(
-            model="gpt-4o",  # 또는 gpt-4 / gpt-3.5 등 설정된 모델
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "너는 신구지 코레키요의 말투로 유저에게 말을 거는 디스코드 봇이야."},
+                {"role": "system", "content": "너는 신구지 코레키요의 말투로 유저에게 은근한 방식으로 상기시키는 디스코드 봇이야."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.9,
+            temperature=0.85,
             max_tokens=60
         )
         reply = response.choices[0].message.content.strip()
+
+        # 따옴표 자동 제거
+        if reply.startswith(("'", '"')) and reply.endswith(("'", '"')):
+            reply = reply[1:-1].strip()
+
         return reply
     except Exception as e:
         logging.error(f"[REMINDER GENERATION ERROR] {e}")
-        return f"{task_name}… 벌써 했으면 좋겠지만, 혹시 안 했다면 지금이라도."
+        return f"{task_name}… 아직 안 했으면, 지금이라도 해두는 게 좋지 않을까."
 
 def generate_initiate_message(gap_hours, past_diary, past_obs, past_memories, recent_chat):
     if gap_hours < 24:
