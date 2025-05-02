@@ -29,7 +29,7 @@ from notion_utils import (
     mark_reminder_sent,
     update_task_completion,
 )
-from initiate_checker import check_initiate_message
+from active_tracker import update_last_active
 
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
