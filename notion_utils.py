@@ -645,6 +645,16 @@ def reset_daily_todos():
 
     except Exception as e:
         print(f"[ERROR] ❌ 필터 쿼리 실패: {e}")
+
+def group_todos_by_timeblock(todos):
+    grouped = {}
+    for todo in todos:
+        block = todo["properties"].get("시간대", {}).get("select", {}).get("name", "기타")
+        title_prop = todo["properties"].get("할 일", {}).get("title", [])
+        title = title_prop[0]["plain_text"] if title_prop else "(제목 없음)"
+        grouped.setdefault(block, []).append(title)
+    logging.debug(f"[DEBUG] ✅ 시간대별 할 일 그룹핑 완료: {grouped}")
+    return grouped
             
 
 def mark_reminder_sent(page_id, attempts=1):
