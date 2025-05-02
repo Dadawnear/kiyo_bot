@@ -27,6 +27,7 @@ SILLYTAVERN_API_BASE = os.getenv("SILLYTAVERN_API_BASE", "http://localhost:8000/
 FACE_TO_FACE_CHANNEL_ID = 1362310907711197194
 
 KST = timezone(timedelta(hours=9))  # ← 한국 시간대 객체 생성
+now = datetime.now(ZoneInfo("Asia/Seoul"))
 
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
