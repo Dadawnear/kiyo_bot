@@ -120,6 +120,16 @@ async def reminder_loop():
     while True:
         await check_todo_reminders()
         await asyncio.sleep(600)
+        
+def is_affirmative_confirmation(text: str) -> bool:
+    text = text.lower()
+    # 부정 표현 먼저 걸러냄
+    if re.search(r"(안 했|못 했|까먹|깜빡|잊어|아직)", text):
+        return False
+    # 긍정 표현이 들어간 경우만 True
+    if re.search(r"(약\s*먹었|복용했|챙겼|다\s*했|끝냈|완료했|먹었어|했어)", text):
+        return True
+    return False
 
 @bot.event
 async def on_ready():
@@ -176,7 +186,7 @@ async def on_raw_message_delete(payload):
         image_url = last_midjourney_message[deleted_message_id]
         await update_diary_image(last_created_diary_page_id, image_url)
 
-@client.event
+@bot.event
 async def on_message(message):
     global latest_midjourney_image_url
     global last_created_diary_page_id
@@ -296,6 +306,21 @@ async def on_message(message):
         except Exception as e:
             logging.error(f"[ERROR] 기억 저장 중 오류: {repr(e)}")
 
+    # '했어'는 리마인더 메시지에 대한 '답장'일 때만 처리
+    if (
+        is_affirmative_confirmation(message.content) and
+        message.reference and
+        message.reference.message_id == recent_reminder_context.get("message_id")
+    ):
+        try:
+            await update_task_completion(recent_reminder_context["page_id"], True)
+            await message.channel.send(f"크크… '{recent_reminder_context['task_name']}' 확인했어. 잘했어.")
+            logging.debug(f"[TODO COMPLETE] ✅ '{recent_reminder_context['task_name']}' 자동 완료 체크됨")
+        except Exception as e:
+            logging.error(f"[AUTO COMPLETE ERROR] ❌ 완료 체크 중 오류: {repr(e)}")
+        return  # 더 이상 처리하지 않음
+
+    # 그 외 일반 메시지: 신구지 응답 생성
     if not message.content.strip():
         return
 
