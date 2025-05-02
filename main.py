@@ -1,10 +1,18 @@
 import asyncio
 import os
+import logging
 from discord_bot import start_discord_bot
 from initiate_checker import check_initiate_message
 from aiohttp import web
 
 os.environ["TZ"] = "Asia/Seoul"
+
+# 디버그 노이즈 줄이기
+for noisy in ["httpcore", "httpx", "discord.gateway", "discord.client"]:
+    logging.getLogger(noisy).setLevel(logging.WARNING)
+
+# 너가 디버그 켜고 싶은 부분만 유지
+logging.basicConfig(level=logging.DEBUG)  
 
 # 루트 핸들러
 async def handle_root(request):
