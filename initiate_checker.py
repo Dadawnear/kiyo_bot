@@ -10,11 +10,13 @@ from kiyo_brain import (
     fetch_recent_observation_entries,
     generate_kiyo_memory_summary
 )
+from notion_utils import get_last_active
 from dotenv import load_dotenv
 
 # === 설정 ===
 USER_ID = int(os.getenv("USER_ID"))
 KST = pytz.timezone('Asia/Seoul')
+last_active = get_last_active()
 
 # === 주기적 선톡 검사 ===
 @tasks.loop(minutes=30)
