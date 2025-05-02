@@ -64,9 +64,6 @@ recent_reminder_context = {
     "message_id": None
 }
 
-# 아침 또는 밤일 때
-reminder_text = await generate_timeblock_reminder_gpt(timeblock, grouped[timeblock])
-
 def get_latest_image_url():
     return latest_midjourney_image_url
 
@@ -122,25 +119,24 @@ async def check_todo_reminders():
     except Exception as e:
         logging.error(f"[REMINDER ERROR] ❌ 리마인더 전송 중 오류: {repr(e)}")
 
-async def send_timeblock_reminder(bot):
-    now = datetime.now(KST)
-    hour = now.hour
+async def send_timeblock_reminder(bot, timeblock: str):
+    try:
+        todos = fetch_pending_todos()
+        grouped = group_todos_by_timeblock(todos)
 
-    # 시간대 진입 조건 (예: 아침 9시 또는 밤 21시)
-    if hour not in [9, 21]:
-        return
+        if timeblock in grouped:
+            reminder_text = await generate_timeblock_reminder_gpt(timeblock, grouped[timeblock])
+            logging.debug(f"[REMINDER] 📣 {timeblock} 리마인드 메시지 생성 완료")
 
-    todos = fetch_pending_todos()
-    grouped = group_todos_by_timeblock(todos)
+            user = discord.utils.get(bot.users, name=USER_DISCORD_NAME)
+            if user:
+                await user.send(reminder_text)
+                logging.info(f"[REMINDER] ✅ {timeblock} 리마인드 전송 완료")
+        else:
+            logging.debug(f"[REMINDER] ⛔ '{timeblock}' 시간대에 해당하는 할 일 없음")
 
-    timeblock = "아침" if hour == 9 else "밤"
-    if timeblock in grouped:
-        reminder_text = generate_timeblock_reminder(timeblock, grouped[timeblock])
-        logging.debug(f"[DEBUG] 📣 시간대 리마인드 메시지 생성 완료:\n{reminder_text}")
-
-        user = await find_user(client, USER_DISCORD_NAME)
-        if user:
-            await user.send(reminder_text)
+    except Exception as e:
+        logging.error(f"[ERROR] send_timeblock_reminder({timeblock}) 실패: {repr(e)}")
 
 async def reminder_loop():
     while True:
