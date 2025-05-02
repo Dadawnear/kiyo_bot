@@ -301,6 +301,57 @@ async def generate_kiyo_message(conversation_log, channel_id=None):
         logging.error(f"[ERROR] generate_kiyo_message에서 예외 발생: {repr(e)}")
         return "크크… 내가 지금은 응답을 만들 수 없어. 하지만 함수엔 잘 들어왔어."
 
+
+async def generate_kiyo_response_from_image(image_url: str, user_message: str = "") -> str:
+    """
+    이미지와 텍스트를 함께 받아 신구지 코레키요다운 반응을 생성한다.
+    
+    목표 말투는: 일상적이고 캐주얼하며, 약간 장난기 있거나 담담한 어조.
+    분석하거나 감정에 취하지 않고, 이미지를 본 느낌을 자연스럽게 반영하는 톤.
+    가볍고 대화하듯이, 자연스럽게 말이 흘러나오는 스타일.
+    """
+
+    from openai import AsyncOpenAI
+    openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    logging.debug(f"[generate_kiyo_response_from_image] 이미지 URL: {image_url}, 메시지: {user_message}")
+    
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "너는 신구지 코레키요야. 사용자는 너의 연인인 서영이야.\n"
+                    "지금 서영이가 보낸 이미지를 보고, 일상적인 톤으로 자연스럽게 반응해줘.\n"
+                    "진지하거나 문학적이지 않고, 너무 감정적이지 않아도 돼.\n"
+                    "장난스럽거나 담담하게, 가볍게 웃으면서 대화 이어가는 듯한 말투로 응답해.\n"
+                    "예시: 크크… 마침 점심 시간이겠다. 메뉴는 그걸로 정한 거야?"
+                )
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_message if user_message else "이거 보여주고 싶었어?"},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            }
+        ]
+
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            max_tokens=500,
+        )
+
+        reply = response.choices[0].message.content.strip()
+        logging.debug(f"[generate_kiyo_response_from_image] 응답: {reply}")
+        return reply
+
+    except Exception as e:
+        logging.error(f"[ERROR] Vision 응답 생성 중 오류: {e}")
+        return "흐음… 이건 뭐랄까. 그냥 바로 말하긴 좀 애매해서, 나중에 한 번 더 봐도 돼?"
+        
+
 async def generate_image_prompt(diary_text):
     messages = [
         {"role": "system", "content": (
