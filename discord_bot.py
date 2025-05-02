@@ -134,28 +134,32 @@ async def on_message(message):
 
 @client.event
 async def on_ready():
-    logging.info(f'Logged in as {client.user}')
-    if not check_initiate_message.is_running():
-        check_initiate_message.start(client)  
-    global scheduler_initialized
-    print(f"[READY] Logged in as {client.user}")
-
-    if not scheduler_initialized:
-        try:
-            from scheduler import setup_scheduler
-            setup_scheduler(
-                client,
-                conversation_log,
-                get_latest_image_url,
-                clear_latest_image_url
-            )
-            client.loop.create_task(reminder_loop()) # 할 일 체크 루프 시작
-            scheduler_initialized = True
-            logging.info("[READY] 스케줄러 정상 초기화 완료")
-        except Exception as e:
-            logging.exception("[ERROR] 스케줄러 설정 중 치명적인 오류 발생:")
-    else:
-        logging.info("[READY] 스케줄러 이미 초기화됨")
+    try:
+        logging.info(f'Logged in as {client.user}')
+        if not check_initiate_message.is_running():
+            check_initiate_message.start(client)  
+        global scheduler_initialized
+        print(f"[READY] Logged in as {client.user}")
+    
+        if not scheduler_initialized:
+            try:
+                from scheduler import setup_scheduler
+                setup_scheduler(
+                    client,
+                    conversation_log,
+                    get_latest_image_url,
+                    clear_latest_image_url
+                )
+                client.loop.create_task(reminder_loop()) # 할 일 체크 루프 시작
+                scheduler_initialized = True
+                logging.info("[READY] 스케줄러 정상 초기화 완료")
+            except Exception as e:
+                logging.exception("[ERROR] 스케줄러 설정 중 치명적인 오류 발생:")
+        else:
+            logging.info("[READY] 스케줄러 이미 초기화됨")
+            
+    except Exception as e:
+        logging.exception(f"[ERROR] on_ready 내부 오류 발생: {repr(e)}")
 
 @client.event
 async def on_raw_message_edit(payload):
