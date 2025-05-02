@@ -396,7 +396,7 @@ async def generate_diary_and_image(conversation_log, client: discord.Client, sty
         return None, None
 
 async def generate_timeblock_reminder_gpt(timeblock: str, todos: list[str]) -> str:
-    task_list = ", ".join(todos)
+    task_preview = ", ".join(todos[:5]) + (" 외 몇 가지" if len(todos) > 5 else "")
     prompt = (
         f"지금은 '{timeblock}' 시간이야. 유저가 해야 할 일은 다음과 같아: {task_list}. "
         "신구지 코레키요는 단간론파 V3의 민속학자 캐릭터야. 이걸 그의 말투로, 하지만 너무 문어체나 '의식'같은 단어는 쓰지 않고, "
