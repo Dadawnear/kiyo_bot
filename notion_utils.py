@@ -483,7 +483,6 @@ async def upload_to_notion(text, emotion_key="기록", image_url=None):
         logging.error(f"[NOTION ERROR] 업로드 실패: {e}")
         return None
 
-# ✅ 누락된 함수 추가
 def get_last_diary_timestamp():
     url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
     data = {
