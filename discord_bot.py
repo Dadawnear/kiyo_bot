@@ -5,6 +5,7 @@ import asyncio
 import re
 import logging
 import pytz
+from pytz import timezone
 from discord.ext import commands
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -123,9 +124,9 @@ async def reminder_loop():
 
 def update_last_active():
     global last_user_active_time
-    last_user_active_time = datetime.now(pytz.timezone("Asia/Seoul"))
+    last_user_active_time = datetime.now(KST)
 
-async def get_last_user_message_time(user_id: int):
+def get_last_active():
     return last_user_active_time
 
 @bot.event
@@ -221,6 +222,8 @@ async def on_message(message):
 
     if not is_target_user(message):
         return
+        
+    update_last_active()
 
     if message.content.strip().startswith("!cleanup"):
         match = re.search(r"!cleanup(\d*)", message.content.strip())
