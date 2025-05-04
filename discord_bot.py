@@ -98,25 +98,46 @@ async def check_todo_reminders():
         user = discord.utils.get(bot.users, name=USER_DISCORD_NAME)
 
         for todo in todos:
-            task_name = todo['properties']['할 일']['title'][0]['plain_text']
-            page_id = todo['id']
-            raw_attempts = todo['properties'].get('리마인드 시도 수', {}).get('number')
-            attempts = (raw_attempts if isinstance(raw_attempts, (int, float)) else 0) + 1
+            try:
+                props = todo.get('properties', {})
+                page_id = todo.get('id')
+        
+                task_title_info = props.get('할 일', {}).get('title', [])
+                if not task_title_info:
+                    logging.warning(f"[REMINDER] ⛔ '할 일' 제목이 비어 있음 (Page ID: {page_id})")
+                    continue
+                task_name = task_title_info[0].get('plain_text', '이름 없음')
+        
+                # 구체적인 시간 확인
+                time_field = props.get("구체적인 시간", {}).get("rich_text", [])
+                if not time_field or not time_field[0].get("plain_text", "").strip():
+                    logging.debug(f"[REMINDER] ⏭️ '{task_name}'은 구체적인 시간이 없어 그룹 리마인더 대상으로 넘김")
+                    continue
+        
+                # 리마인드 시도 수
+                raw_attempts = props.get('리마인드 시도 수', {}).get('number')
+                attempts = (raw_attempts if isinstance(raw_attempts, (int, float)) else 0) + 1
+                logging.debug(f"[REMINDER] 🧮 '{task_name}' 리마인드 시도 수: {attempts}")
+        
+                # 대사 생성
+                reminder_text = await generate_reminder_dialogue(task_name)
+                if not reminder_text:
+                    logging.warning(f"[REMINDER] ❗ '{task_name}'에 대해 대사 생성 실패")
+                    continue
+        
+                if user:
+                    msg = await user.send(reminder_text)
+                    logging.info(f"[REMINDER] ✅ '{task_name}'에 대한 리마인더 전송 완료 (Message ID: {msg.id})")
+                    mark_reminder_sent(page_id, attempts)
+                    recent_reminder_context["task_name"] = task_name
+                    recent_reminder_context["page_id"] = page_id
+                    recent_reminder_context["message_id"] = msg.id
+                else:
+                    logging.warning(f"[REMINDER] ❌ 유저를 찾을 수 없어 '{task_name}' 전송 실패")
+        
+            except Exception as e:
+                logging.error(f"[REMINDER ERROR] ❌ '{todo.get('id', '알 수 없음')}' 처리 중 오류 발생: {repr(e)}")
 
-            reminder_text = await generate_reminder_dialogue(task_name)
-
-            if user:
-                logging.debug(f"[REMINDER] ✅ '{task_name}'에 대한 리마인더 전송 완료")
-                mark_reminder_sent(page_id, attempts)
-                msg = await user.send(reminder_text)
-                recent_reminder_context["task_name"] = task_name
-                recent_reminder_context["page_id"] = page_id
-                recent_reminder_context["message_id"] = msg.id
-            else:
-                logging.warning("[REMINDER] ❗ 대상 유저 찾을 수 없음")
-
-    except Exception as e:
-        logging.error(f"[REMINDER ERROR] ❌ 리마인더 전송 중 오류: {repr(e)}")
 
 async def send_timeblock_reminder(bot, timeblock: str):
     try:
