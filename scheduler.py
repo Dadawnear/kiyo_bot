@@ -88,17 +88,16 @@ def setup_scheduler(client, conversation_log, latest_image_getter, clear_image_c
     scheduler.add_job(lambda: asyncio.create_task(send_daily_summary()), CronTrigger(hour=2, minute=0))
     scheduler.add_job(lambda: asyncio.create_task(send_observation_log()), CronTrigger(hour=3, minute=0))
 
-    if timeblock not in LAST_TIMEBLOCK_SENT or time.time() - LAST_TIMEBLOCK_SENT[timeblock] > 3600:
-        # 아침~밤: 지정 시간
-        scheduler.add_job(lambda: asyncio.create_task(send_timeblock_reminder(client, "아침")), CronTrigger(hour=9, minute=0))
-        scheduler.add_job(lambda: asyncio.create_task(send_timeblock_reminder(client, "점심")), CronTrigger(hour=12, minute=0))
-        scheduler.add_job(lambda: asyncio.create_task(send_timeblock_reminder(client, "저녁")), CronTrigger(hour=18, minute=0))
-        scheduler.add_job(lambda: asyncio.create_task(send_timeblock_reminder(client, "밤")), CronTrigger(hour=21, minute=0))
-
-        # 무관: 하루에 한 번 랜덤 시간
-        random_hour = random.choice(range(10, 22))
-        random_minute = random.choice([0, 15, 30, 45])
-        scheduler.add_job(lambda: asyncio.create_task(send_timeblock_reminder(client, "무관")), CronTrigger(hour=random_hour, minute=random_minute))
+    # 아침~밤: 지정 시간
+    scheduler.add_job(lambda tb="아침": asyncio.create_task(send_timeblock_reminder(client, tb)), CronTrigger(hour=9, minute=0))
+    scheduler.add_job(lambda tb="점심": asyncio.create_task(send_timeblock_reminder(client, tb)), CronTrigger(hour=12, minute=0))
+    scheduler.add_job(lambda tb="저녁": asyncio.create_task(send_timeblock_reminder(client, tb)), CronTrigger(hour=18, minute=0))
+    scheduler.add_job(lambda tb="밤": asyncio.create_task(send_timeblock_reminder(client, tb)), CronTrigger(hour=21, minute=0))
+    
+    # 무관: 하루에 한 번 랜덤 시간
+    random_hour = random.choice(range(10, 22))
+    random_minute = random.choice([0, 15, 30, 45])
+    scheduler.add_job(lambda tb="무관": asyncio.create_task(send_timeblock_reminder(client, tb)), CronTrigger(hour=random_hour, minute=random_minute))
 
     logging.info("[SCHEDULER] 스케줄러 시작됨")
     scheduler.start()
