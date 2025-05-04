@@ -1,9 +1,11 @@
+# requirements.txt
 openai
 aiohttp
 python-dotenv
 python-dateutil>=2.8.2
 discord.py
 apscheduler
-requests
+requests # notion-client의 의존성 또는 run_in_executor 내 사용 위해 유지
 pytz
 notion-client
+httpx # 비동기 HTTP 요청 위해 추가 (선택적, run_in_executor만 사용 시 불필요)
