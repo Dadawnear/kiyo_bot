@@ -651,10 +651,13 @@ def group_todos_by_timeblock(todos):
         block = todo["properties"].get("시간대", {}).get("select", {}).get("name", "기타")
         title_prop = todo["properties"].get("할 일", {}).get("title", [])
         title = title_prop[0]["plain_text"] if title_prop else "(제목 없음)"
-        grouped.setdefault(block, []).append(title)
+        page_id = todo.get("id")
+        grouped.setdefault(block, []).append({
+            "title": title,
+            "page_id": page_id
+        })
     logging.debug(f"[DEBUG] ✅ 시간대별 할 일 그룹핑 완료: {grouped}")
     return grouped
-            
 
 def mark_reminder_sent(page_id, attempts=1):
     now = datetime.now(KST).isoformat()
