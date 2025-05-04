@@ -91,7 +91,7 @@ def is_upscaled_image(message):
     # Midjourney 업스케일 메시지엔 보통 "Image #1" ~ "Image #4" 같은 표현이 들어감
     return bool(re.search(r"Image\s+#\d", message.content))
 
-async def check_todo_reminders():
+async def check_todo_reminders(bot):
     try:
         logging.debug("[REMINDER] 할 일 리마인더 체크 시작")
         todos = fetch_pending_todos()
@@ -138,6 +138,8 @@ async def check_todo_reminders():
             except Exception as e:
                 logging.error(f"[REMINDER ERROR] ❌ '{todo.get('id', '알 수 없음')}' 처리 중 오류 발생: {repr(e)}")
 
+    except Exception as e:
+        logging.error(f"[REMINDER ERROR] ❌ 전체 리마인드 루프 오류: {repr(e)}")
 
 async def send_timeblock_reminder(bot, timeblock: str):
     try:
