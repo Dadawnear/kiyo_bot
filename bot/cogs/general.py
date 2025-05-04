@@ -2,41 +2,33 @@ import discord
 from discord.ext import commands
 import logging
 import re
+from typing import TYPE_CHECKING # 타입 힌트 순환 참조 방지
 
 import config # 설정 임포트
 from utils.activity_tracker import update_last_active # 유틸리티 임포트
+from utils.helpers import is_target_user # 헬퍼 함수 임포트
+
+# 타입 힌트를 위해 KiyoBot 클래스 임포트 (순환 참조 방지)
+if TYPE_CHECKING:
+    from bot.client import KiyoBot
 
 logger = logging.getLogger(__name__)
 
 class GeneralCog(commands.Cog):
-    """봇의 일반적인 기능 및 이벤트 처리를 담당하는 Cog"""
+    """봇의 일반적인 기능 및 핵심 메시지 처리 로직 담당"""
 
-    def __init__(self, bot: commands.Bot):
+    # bot 타입을 KiyoBot으로 명시하여 자동완성 및 타입 검사 활용
+    def __init__(self, bot: 'KiyoBot'):
         self.bot = bot
-        # conversation_log는 전역 상태였으므로, 여기서 직접 관리하거나
-        # bot 인스턴스 속성으로 옮겨서 관리하는 리팩토링이 필요합니다.
-        # 우선은 이 Cog에서는 직접 참조하지 않도록 설계합니다.
-        # self.conversation_log = bot.conversation_log # 만약 bot 객체에 log를 붙였다면
-
-    # --- Helper Functions ---
-    def is_target_user(self, author: discord.User | discord.Member) -> bool:
-        """명령어나 메시지 발신자가 설정된 대상 유저인지 확인"""
-        if config.TARGET_USER_ID:
-            return author.id == config.TARGET_USER_ID
-        elif config.TARGET_USER_DISCORD_NAME:
-            # TARGET_USER_DISCORD_NAME 형식은 'username#discriminator'
-            return str(author) == config.TARGET_USER_DISCORD_NAME
-        else:
-            logger.warning("Target user not configured. Allowing command from anyone.")
-            return True # 타겟 유저 설정 없으면 일단 모두 허용 (주의!)
 
     # --- Commands ---
     @commands.command(name='cleanup', help='봇이 최근에 보낸 메시지를 지정한 개수만큼 삭제합니다. (대상 유저만 사용 가능)')
     async def cleanup_messages(self, ctx: commands.Context, limit: int = 1):
         """봇의 최근 메시지를 삭제하는 명령어 (!cleanup [개수])"""
-        if not self.is_target_user(ctx.author):
-            # 대상 유저가 아니면 반응하지 않음 (또는 거부 메시지 전송)
+        # is_target_user 헬퍼 사용
+        if not is_target_user(ctx.author):
             logger.debug(f"Cleanup command ignored from non-target user: {ctx.author}")
+            # 대상 유저 아니면 조용히 무시
             return
 
         if limit <= 0:
@@ -46,77 +38,122 @@ class GeneralCog(commands.Cog):
              await ctx.send("크크… 한 번에 너무 많이 지우려는 것 같아. 50개 이하로 해줘.", delete_after=10)
              return
 
+        # 사용자 명령어 메시지 삭제 시도
         try:
-            # 명령어 메시지 먼저 삭제
             await ctx.message.delete()
-        except discord.Forbidden:
-            logger.warning("Missing permissions to delete the command message.")
-        except discord.NotFound:
-            pass # 이미 삭제된 경우 무시
+        except (discord.Forbidden, discord.NotFound) as e:
+            logger.warning(f"Could not delete command message: {e}")
 
         deleted_count = 0
         try:
-            # 채널 기록을 거슬러 올라가며 봇 메시지 삭제
-            async for message in ctx.channel.history(limit=limit * 5): # 삭제할 개수보다 넉넉히 가져옴
+            # 채널 기록 확인 및 봇 메시지 삭제
+            async for message in ctx.channel.history(limit=limit * 5): # 충분히 가져옴
                 if message.author == self.bot.user:
                     try:
                         await message.delete()
                         deleted_count += 1
-                        logger.debug(f"Deleted bot message: {message.id} in channel {ctx.channel.id}")
+                        # logger.debug(f"Deleted bot message: {message.id} in channel {ctx.channel.id}")
                         if deleted_count >= limit:
-                            break # 요청한 개수만큼 삭제 완료
-                    except discord.Forbidden:
-                        logger.warning(f"Missing permissions to delete message {message.id}.")
-                        break # 권한 없으면 중단
+                            break
+                    except (discord.Forbidden, discord.NotFound) as e:
+                         logger.warning(f"Could not delete bot message {message.id}: {e}")
                     except discord.HTTPException as e:
-                        logger.error(f"Failed to delete message {message.id}: {e}")
+                        logger.error(f"Failed to delete message {message.id} due to HTTP error: {e}")
+                        await asyncio.sleep(1) # 잠시 대기 후 계속 시도? 여기서는 일단 중단
 
-            # 삭제 결과 메시지 (잠시 후 자동 삭제)
             await ctx.send(f"크크… 내 메시지 {deleted_count}개를 정리했어.", delete_after=5)
             logger.info(f"Cleaned up {deleted_count} bot messages in channel {ctx.channel.id} by {ctx.author}")
 
-            # 중요: conversation_log 처리
-            # 이전 코드에서는 conversation_log.pop() 등을 사용했지만,
-            # 이는 실제 삭제된 메시지와 로그 항목의 동기화를 보장하지 않습니다.
-            # conversation_log를 관리하는 더 나은 방법(예: 메시지 ID 기반 관리)으로
-            # 리팩토링하기 전까지는 여기서 로그를 직접 수정하는 것은 위험합니다.
-            # logger.warning("Conversation log cleanup is currently omitted in GeneralCog.cleanup_messages.")
+            # conversation_log 수정은 여기서 하지 않음 (메시지 ID 기반으로 정확히 하려면 복잡)
+            logger.warning("Cleanup command deleted messages but did not modify the conversation log state.")
 
         except Exception as e:
-            logger.error(f"Error during cleanup command: {e}", exc_info=True)
+            logger.error(f"Error during cleanup command processing: {e}", exc_info=True)
             try:
-                await ctx.send("크크… 메시지를 정리하는 중에 문제가 생겼어.", delete_after=10)
+                await ctx.send("크크… 메시지를 정리하는 중에 오류가 생겼어.", delete_after=10)
             except discord.HTTPException:
-                pass # 메시지 전송조차 실패하는 경우
+                pass
 
     # --- Event Listeners ---
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        """메시지 수신 시 기본적인 처리 및 로깅"""
-        # 봇 자신의 메시지는 무시
-        if message.author == self.bot.user:
+        """
+        메시지 수신 시 처리: 필터링, 활동 기록, 대화 로그 추가, AI 응답 생성/전송.
+        명령어, 다른 Cog에서 처리한 메시지는 응답 생성 안 함.
+        """
+        # 1. 기본 필터링: 봇 자신, 다른 봇 메시지 무시
+        if message.author == self.bot.user or message.author.bot:
             return
 
-        # 다른 봇의 메시지도 무시 (선택 사항)
-        if message.author.bot:
+        # 2. 명령어 형식 메시지 무시 (명령어 처리는 Bot 객체가 알아서 함)
+        ctx = await self.bot.get_context(message)
+        if ctx.valid: # 메시지가 유효한 명령어 형식이면 여기서 처리 중단
+            logger.debug(f"Ignoring message as it's a valid command: {message.content}")
             return
 
-        # DM 채널이거나, 대상 유저의 메시지일 경우 활동 시간 갱신
-        # (봇이 특정 유저하고만 상호작용하는 경우 이 조건 강화 가능)
-        if isinstance(message.channel, discord.DMChannel) or self.is_target_user(message.author):
-            update_last_active()
-            logger.debug(f"Activity time updated by user {message.author} in channel {message.channel.id}")
+        # 3. 대상 유저 및 DM 채널 필터링 (봇 설정에 따라 조절)
+        # 여기서는 대상 유저이거나 DM 채널인 경우만 처리하도록 가정
+        is_dm = isinstance(message.channel, discord.DMChannel)
+        target_user = is_target_user(message.author)
 
-        # 명령어 처리 전 기본적인 로그 남기기
-        # logger.debug(f"Message received: '{message.content}' from {message.author} in {message.channel}")
+        if not (is_dm and target_user): # 대상 유저의 DM이 아니면 무시
+             # logger.debug(f"Ignoring message from non-target user/channel: User={message.author}, Channel={message.channel}")
+             return
 
-        # 중요: Cog에서는 process_commands를 자동으로 호출하지 않습니다.
-        # Bot 클래스에서 on_message를 오버라이드하지 않는 한, 기본적으로 명령어 처리가 됩니다.
-        # 만약 Bot 클래스에서 on_message를 오버라이드하여 여기서 모든 메시지 처리를
-        # 하려고 한다면, 마지막에 await self.bot.process_commands(message)를 호출해야 합니다.
-        # 현재 구조에서는 Bot 클래스에서 on_message를 오버라이드하지 않을 것이므로 필요 없습니다.
+        # --- 대상 유저의 DM 메시지 처리 ---
+        channel_id = message.channel.id
+        user_name = message.author.name # 또는 str(message.author)
+
+        # 4. 활동 시간 갱신
+        update_last_active()
+        # logger.debug(f"Activity time updated by {user_name}")
+
+        # 5. 사용자 메시지 대화 로그에 추가
+        # add_conversation_log 메소드는 KiyoBot 클래스에 구현됨
+        self.bot.add_conversation_log(channel_id, user_name, message.content)
+        logger.info(f"Logged message from {user_name} in channel {channel_id}.")
+
+        # 6. AI 응답 생성 및 전송
+        # (주의: NotionFeaturesCog의 on_message 리스너(기억하기)가 이 메시지를
+        # 처리했다면 여기서 응답 생성을 건너뛰는 로직이 필요할 수 있음.
+        # 여기서는 일단 무조건 응답 생성 시도)
+        try:
+            # 응답 생성에 필요한 컨텍스트 가져오기
+            conversation_log = self.bot.get_conversation_log(channel_id)
+            # Notion 서비스 통해 최근 정보 가져오기 (오류 발생해도 진행 가능하도록)
+            recent_memories = await self.bot.notion_service.fetch_recent_memories(limit=3)
+            recent_observations = await self.bot.notion_service.fetch_recent_observations(limit=1)
+            recent_diary_summary = await self.bot.notion_service.fetch_recent_diary_summary(limit=1)
+
+            # AI 서비스 호출하여 응답 생성
+            logger.debug(f"Requesting AI response for channel {channel_id}...")
+            kiyo_response = await self.bot.ai_service.generate_response(
+                conversation_log=conversation_log,
+                recent_memories=recent_memories if isinstance(recent_memories, list) else None,
+                recent_observations=recent_observations if isinstance(recent_observations, str) else None,
+                recent_diary_summary=recent_diary_summary if isinstance(recent_diary_summary, str) else None
+            )
+
+            if kiyo_response:
+                # 응답 메시지 전송
+                await message.channel.send(kiyo_response)
+                # 봇 응답도 로그에 추가
+                self.bot.add_conversation_log(channel_id, "キヨ", kiyo_response)
+                logger.info(f"Sent AI response to channel {channel_id}.")
+            else:
+                logger.warning(f"AI service returned empty response for channel {channel_id}.")
+
+        except Exception as e:
+            logger.error(f"Error generating or sending AI response for channel {channel_id}: {e}", exc_info=True)
+            try:
+                # 사용자에게 오류 알림 (선택적)
+                await message.channel.send("크크… 지금은 답하기 어렵네. 무슨 문제가 있는 것 같아.")
+            except discord.HTTPException:
+                pass # 메시지 전송조차 실패
+
 
 # Cog를 봇에 추가하기 위한 필수 설정 함수
 async def setup(bot: commands.Bot):
-    await bot.add_cog(GeneralCog(bot))
+    # KiyoBot 타입으로 명시적 캐스팅 (선택적)
+    await bot.add_cog(GeneralCog(bot)) # type: ignore
     logger.info("GeneralCog has been loaded.")
