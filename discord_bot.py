@@ -145,13 +145,16 @@ async def send_timeblock_reminder(bot, timeblock: str):
         grouped = group_todos_by_timeblock(todos)
 
         if timeblock in grouped:
-            reminder_text = await generate_timeblock_reminder_gpt(timeblock, grouped[timeblock])
+            titles = [todo["title"] for todo in grouped[timeblock]]
+            reminder_text = await generate_timeblock_reminder_gpt(timeblock, titles)
             logging.debug(f"[REMINDER] 📣 {timeblock} 리마인드 메시지 생성 완료")
 
             user = discord.utils.get(bot.users, name=USER_DISCORD_NAME)
             if user:
                 await user.send(reminder_text)
-                logging.info(f"[REMINDER] ✅ {timeblock} 리마인드 전송 완료")
+                for todo in grouped[timeblock]:
+                    mark_reminder_sent(todo["page_id"])
+                    logging.info(f"[REMINDER] ✅ {timeblock} 리마인드 전송 완료")
         else:
             logging.debug(f"[REMINDER] ⛔ '{timeblock}' 시간대에 해당하는 할 일 없음")
 
