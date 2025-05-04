@@ -63,6 +63,12 @@ recent_reminder_context = {
     "message_id": None
 }
 
+def get_bot():
+    return bot
+
+def get_user_discord_name():
+    return USER_DISCORD_NAME
+
 def get_latest_image_url():
     return latest_midjourney_image_url
 
