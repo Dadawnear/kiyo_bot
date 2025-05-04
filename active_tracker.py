@@ -10,3 +10,6 @@ def update_last_active():
 
 def get_last_active():
     return _last_user_active_time
+
+def get_last_user_message_time():
+    return get_last_active()
