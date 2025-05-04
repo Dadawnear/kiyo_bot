@@ -2,21 +2,18 @@ import discord
 from discord.ext import commands
 from discord import ui # Discord UI Kit (Buttons, Selects, etc.)
 import logging
+from typing import TYPE_CHECKING
 
-import config
+import config # 설정 임포트
 
 # --- Service Imports ---
-# from services.notion_service import NotionService
+# 실제 NotionService 임포트
+from services.notion_service import NotionService
 
-# --- 임시 Service Placeholder ---
-class PlaceholderNotionService:
-    async def update_task_completion(self, page_id: str, is_done: bool):
-        status = "Done" if is_done else "Not Done"
-        logger.info(f"Notion task {page_id} completion updated to {status} (Placeholder)")
-        # 실제 구현 시 오류 발생 가능성 있음 (예: 페이지 없음, API 오류)
-        # raise Exception("Simulated Notion API error") # 테스트용 오류 발생
+# 타입 힌트를 위해 KiyoBot 클래스 임포트 (순환 참조 방지)
+if TYPE_CHECKING:
+    from bot.client import KiyoBot
 
-# --- Logger ---
 logger = logging.getLogger(__name__)
 
 # --- Reminder View Definition ---
@@ -24,111 +21,112 @@ logger = logging.getLogger(__name__)
 class ReminderView(ui.View):
     """
     할 일 리마인더 메시지에 첨부될 View 클래스. "완료" 버튼을 포함합니다.
+    Notion 페이지 ID와 태스크 이름, Notion 서비스 인스턴스를 저장합니다.
     """
-    def __init__(self, notion_page_id: str, task_name: str, notion_service):
-        super().__init__(timeout=None) # timeout=None으로 설정하여 버튼이 영구적으로 작동하도록 함
+    # 이 View는 메시지가 전송될 때 동적으로 생성됩니다.
+    # notion_service 인스턴스는 Cog에서 주입받습니다.
+    def __init__(self, notion_page_id: str, task_name: str, notion_service: NotionService):
+        # timeout=None: 봇이 재시작해도 버튼 상호작용을 받을 수 있게 함 (단, View 객체 자체는 재생성 필요)
+        super().__init__(timeout=None)
         self.notion_page_id = notion_page_id
         self.task_name = task_name
-        self.notion_service = notion_service # Notion 서비스 인스턴스 저장
+        # NotionService 인스턴스를 View 내에서 사용할 수 있도록 저장
+        self.notion_service = notion_service
 
-        # 버튼 라벨 설정 (너무 길지 않게)
-        button_label = f"'{task_name[:20]}{'...' if len(task_name) > 20 else ''}' 완료"
-        # Custom ID 설정 (View 재시작 시 버튼 식별용)
+        # 버튼 라벨 설정 (최대 80자)
+        button_label = f"'{task_name[:50]}{'...' if len(task_name) > 50 else ''}' 완료"
+        # Custom ID: 봇 재시작 후에도 버튼을 식별하는 데 사용될 수 있음 (최대 100자)
+        # 페이지 ID가 충분히 고유하므로 그대로 사용
         done_button_custom_id = f"reminder_done_{notion_page_id}"
 
-        # 자식 요소(버튼) 추가
+        # View에 버튼 추가
         self.add_item(ReminderDoneButton(
             page_id=notion_page_id,
             task_name=task_name,
-            notion_service=self.notion_service,
+            notion_service=self.notion_service, # 버튼에도 서비스 전달
             label=button_label,
             custom_id=done_button_custom_id
         ))
-        # 필요하다면 "나중에" 또는 "스누즈" 버튼 추가 가능
-        # self.add_item(ReminderSnoozeButton(...))
+        # 필요시 다른 버튼(예: 스누즈) 추가 가능
 
-class ReminderDoneButton(ui.Button):
+class ReminderDoneButton(ui.Button['ReminderView']): # View 타입을 명시하여 self.view 타입 힌트 가능
     """
     리마인더의 "완료" 버튼 클래스
     """
-    def __init__(self, page_id: str, task_name: str, notion_service, label: str, custom_id: str):
+    def __init__(self, *, page_id: str, task_name: str, notion_service: NotionService, label: str, custom_id: str):
+        # 버튼 스타일: success (초록색)
         super().__init__(label=label, style=discord.ButtonStyle.success, custom_id=custom_id)
         self.notion_page_id = page_id
         self.task_name = task_name
-        self.notion_service = notion_service
+        self.notion_service = notion_service # NotionService 인스턴스 저장
 
     async def callback(self, interaction: discord.Interaction):
-        """사용자가 '완료' 버튼을 클릭했을 때 호출되는 함수"""
+        """사용자가 '완료' 버튼을 클릭했을 때 호출되는 콜백 함수"""
+        # 클릭한 사용자가 대상 유저인지 확인 (선택적이지만 권장)
+        if not interaction.user or not config.TARGET_USER_ID or interaction.user.id != config.TARGET_USER_ID:
+            await interaction.response.send_message("크크… 다른 사람의 할 일을 완료할 수는 없어.", ephemeral=True)
+            return
+
         logger.info(f"Reminder 'Done' button clicked by {interaction.user} for task '{self.task_name}' (Page ID: {self.notion_page_id})")
 
-        # 1. 사용자에게 상호작용 수신 확인 메시지 표시 (Defer)
-        #    Notion 업데이트가 오래 걸릴 수 있으므로 먼저 응답하는 것이 좋음
-        await interaction.response.defer(ephemeral=True) # ephemeral=True: 클릭한 사용자에게만 보임
+        # 상호작용 defer (Notion API 호출이 지연될 수 있으므로)
+        # ephemeral=True: "명령 실행 중..." 메시지가 클릭한 사용자에게만 보임
+        await interaction.response.defer(ephemeral=True, thinking=True) # thinking=True: 로딩 아이콘 표시
 
         try:
-            # 2. Notion 서비스 호출하여 작업 완료 처리
-            await self.notion_service.update_task_completion(self.notion_page_id, True)
+            # Notion 서비스 호출하여 완료 처리
+            success = await self.notion_service.update_task_completion(self.notion_page_id, True)
 
-            # 3. 성공 메시지 전송 (Defer 후에는 follow-up 사용)
-            success_message = f"크크… '{self.task_name}' 완료 처리했어. 잘했네."
-            await interaction.followup.send(success_message, ephemeral=True)
+            if success:
+                # 성공 시 사용자에게 피드백 (followup 사용)
+                success_message = f"크크… '{self.task_name}' 완료 처리했어. 잘했네."
+                await interaction.followup.send(success_message, ephemeral=True)
 
-            # 4. (선택적) 원래 리마인더 메시지 수정하여 버튼 비활성화 또는 메시지 변경
-            try:
-                # 버튼 비활성화
+                # 원래 메시지의 버튼 비활성화 및 레이블 변경
                 self.disabled = True
-                self.style = discord.ButtonStyle.secondary # 스타일 변경
-                self.label = f"✅ '{self.task_name[:20]}{'...' if len(task_name) > 20 else ''}' 완료됨"
-                # View의 다른 버튼들도 필요하면 비활성화 (view = self.view)
+                self.style = discord.ButtonStyle.secondary # 회색으로 변경
+                self.label = f"✅ '{self.task_name[:50]}{'...' if len(task_name) > 50 else ''}' 완료됨"
+                # self.view는 이 버튼이 속한 ReminderView 객체
+                # View의 모든 버튼을 비활성화 하려면 반복문 사용
                 # for item in self.view.children:
-                #    if isinstance(item, ui.Button):
-                #        item.disabled = True
-                await interaction.edit_original_response(view=self.view)
-                logger.debug(f"Disabled button for task '{self.task_name}' on message {interaction.message.id}")
-            except discord.HTTPException as edit_e:
-                # 메시지를 찾을 수 없거나 수정 권한이 없는 등 예외 처리
-                logger.warning(f"Could not edit original reminder message ({interaction.message.id}) after completion: {edit_e}")
+                #     if isinstance(item, ui.Button): item.disabled = True
+                try:
+                    # 원래 상호작용 메시지를 수정
+                    await interaction.edit_original_response(view=self.view)
+                    logger.debug(f"Disabled button for task '{self.task_name}' on message {interaction.message.id}")
+                except discord.HTTPException as edit_e:
+                    logger.warning(f"Could not edit original reminder message ({interaction.message.id}) after completion: {edit_e}")
+            else:
+                # Notion 업데이트 실패 시 (서비스 함수가 False 반환)
+                 error_message = f"크크… '{self.task_name}' 완료 처리를 Notion에 반영하는 데 실패했어."
+                 await interaction.followup.send(error_message, ephemeral=True)
 
         except Exception as e:
-            # 5. Notion 업데이트 실패 시 오류 메시지 전송
-            logger.error(f"Failed to update Notion task completion for page {self.notion_page_id}: {e}", exc_info=True)
-            error_message = f"크크… '{self.task_name}' 완료 처리를 Notion에 반영하는 데 실패했어."
+            # Notion 서비스 호출 중 예외 발생 시
+            logger.error(f"Error occurred during task completion update for page {self.notion_page_id}: {e}", exc_info=True)
+            error_message = f"크크… '{self.task_name}' 완료 처리 중 오류가 발생했어."
             try:
+                # followup.send는 defer 후에만 사용 가능
                 await interaction.followup.send(error_message, ephemeral=True)
             except discord.HTTPException:
-                # 후속 메시지 전송조차 실패하는 경우
-                pass
+                pass # 후속 메시지 전송조차 실패하는 경우
 
-
+# --- Cog Definition ---
 class RemindersCog(commands.Cog, name="Reminders"):
     """할 일 리마인더 상호작용 (버튼 클릭 등) 처리"""
 
-    def __init__(self, bot: commands.Bot):
+    # bot 타입을 KiyoBot으로 명시
+    def __init__(self, bot: 'KiyoBot'):
         self.bot = bot
-        # --- 서비스 인스턴스 주입 ---
-        # self.notion_service: NotionService = bot.notion_service
-        self.notion_service = PlaceholderNotionService() # 임시 Placeholder 사용
+        # Notion 서비스 인스턴스 가져오기 (실제 서비스 사용)
+        self.notion_service: NotionService = bot.notion_service
+        # Cog 로드 시 View를 등록할 수도 있으나 (persistent views),
+        # 여기서는 리마인더 메시지 전송 시 View 객체를 생성하여 첨부하는 방식을 사용합니다.
 
-        # View는 봇이 재시작해도 계속 작동해야 하므로, Cog 초기화 시 View를 등록합니다.
-        # timeout=None으로 설정된 View는 봇 재시작 후에도 이전에 보내진 메시지의 버튼 클릭을 감지할 수 있습니다.
-        # 단, custom_id를 기반으로 View 객체를 다시 연결해주어야 할 수 있습니다.
-        # discord.py는 View의 상태(어떤 버튼이 눌렸는지 등)를 저장하지 않으므로,
-        # 상태 저장이 필요하면 외부 DB 등을 사용해야 합니다.
-        # 여기서는 간단하게, 봇이 실행되는 동안 View가 유지된다고 가정합니다.
-        # 만약 봇 재시작 후에도 버튼이 완벽하게 작동하게 하려면,
-        # on_ready 등에서 persistent view를 등록하는 로직이 필요할 수 있습니다.
-        # self.bot.add_view(ReminderView(notion_page_id="*", task_name="*", notion_service=self.notion_service))
-        # 위 방식보다는, 필요 시점에 View 객체를 생성하여 메시지에 첨부하는 것이 일반적입니다.
-
-
-    # 이 Cog는 주로 View와 Button 콜백으로 상호작용을 처리하므로,
-    # 별도의 on_message 리스너나 명령어가 필요 없을 수 있습니다.
-    # 만약 리마인더 관련 명령어가 필요하다면 여기에 추가합니다.
+    # 이 Cog는 버튼 콜백으로 주로 작동하므로 별도의 명령어/리스너가 없을 수 있음
 
 
 # Cog를 봇에 추가하기 위한 필수 설정 함수
-async def setup(bot: commands.Bot):
-    # 여기에 ReminderView를 persistent view로 등록하는 로직을 추가할 수 있습니다.
-    # 하지만 실제 메시지 전송 시 View 객체를 생성하는 것이 더 일반적이므로 여기서는 생략합니다.
+async def setup(bot: 'KiyoBot'):
     await bot.add_cog(RemindersCog(bot))
     logger.info("RemindersCog has been loaded.")
