@@ -215,8 +215,10 @@ class AIService:
         # 4. 최근 기억 (Notion 데이터)
         if recent_memories:
             # '\n- '로 join한 결과를 먼저 변수에 저장
-            memory_text = "\n- ".join(recent_memories)
-            # 변수를 f-string 안에 삽입 (이제 중괄호 안에 \n 없음)
+            # recent_memories 리스트의 각 항목이 문자열인지 확인 (오류 방지)
+            valid_memories = [str(mem) for mem in recent_memories if isinstance(mem, (str, int, float))]
+            memory_text = "\n- ".join(valid_memories)
+            # 변수를 f-string 안에 삽입
             context_parts.append(f"최근 유저가 기억하라고 했던 말:\n- {memory_text}")
 
         # 5. 최근 관찰 기록 요약 (Notion 데이터)
