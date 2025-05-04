@@ -458,12 +458,25 @@ class AIService:
         else: tone = "감정적으로 멀어진 분위기, 그러나 말투는 고요하고 내려앉음"
 
         context_parts = [f"톤 가이드: {tone}"]
+
+        # <<< 여기가 수정된 부분 >>>
         if past_memories:
-             context_parts.append(f"유저가 기억하라고 한 말들:\n- {'\n- '.join(past_memories)}")
+             # '\n- '로 join한 결과를 먼저 변수에 저장
+             valid_memories = [str(mem) for mem in past_memories if isinstance(mem, (str, int, float))]
+             memory_text = "\n- ".join(valid_memories)
+             # 변수를 f-string 안에 삽입
+             context_parts.append(f"유저가 기억하라고 한 말들:\n- {memory_text}")
+        # <<< 수정 끝 >>>
+
         if past_obs:
-             summary_obs = past_obs[:300] + "..." if len(past_obs) > 300 else past_obs
-             context_parts.append(f"최근 네(키요)가 작성한 관찰 기록 일부:\n{summary_obs}")
-        additional_context = "\n\n".join(context_parts)
+             # 너무 길면 자르고 "..." 추가, strip()으로 앞뒤 공백 제거
+             summary_obs = past_obs[:300].strip() + "..." if len(past_obs) > 303 else past_obs.strip()
+             # 요약 내용이 있을 때만 추가
+             if summary_obs:
+                 context_parts.append(f"최근 네(키요)가 작성한 관찰 기록 일부:\n{summary_obs}")
+
+        # 빈 컨텍스트 파트 제거 후 join
+        additional_context = "\n\n".join([part for part in context_parts if part])
 
         system_prompt = (
              f"{self._get_base_system_prompt()}\n\n"
@@ -476,8 +489,8 @@ class AIService:
         )
         messages = [{"role": "system", "content": system_prompt}]
         initiate_message = await self._call_llm(messages, temperature=0.8, max_tokens=100)
-        # 응답이 여러 문장일 경우 첫 문장만 사용하거나, 후처리 필요
-        return initiate_message.split('\n')[0] # 간단히 첫 줄만 사용
+        # 응답이 여러 문장일 경우 첫 문장만 사용하고 앞뒤 공백 제거
+        return initiate_message.strip().split('\n')[0]
 
 
 # AIService 인스턴스 생성 (싱글턴처럼 사용 가능)
