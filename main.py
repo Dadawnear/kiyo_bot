@@ -1,7 +1,8 @@
 import asyncio
 import os
 import logging
-from discord_bot import start_discord_bot
+from discord_bot import start_discord_bot, get_bot, get_user_discord_name
+from active_tracker import get_last_active as get_last_user_message_time
 from initiate_checker import check_initiate_message
 from aiohttp import web
 
@@ -38,8 +39,9 @@ async def start_web_server():
 
 # 선톡 루프 설정
 async def loop_initiate_checker():
-    await bot.wait_until_ready()
-    await check_initiate_message(bot, USER_ID, get_last_user_message_time)
+    bot = get_bot()
+    USER_NAME = get_user_discord_name()
+    await check_initiate_message(bot, USER_NAME, get_last_user_message_time)
 
 # 메인 실행
 async def main():
@@ -47,6 +49,7 @@ async def main():
     await asyncio.gather(
         start_discord_bot(),
         start_web_server()
+        loop_initiate_checker()
     )
 
 if __name__ == '__main__':
