@@ -3,6 +3,8 @@ import logging
 import sys
 import os
 import signal # 종료 시그널 처리 위해 추가
+from typing import Optional 
+import aiohttp
 
 # 프로젝트 루트를 sys.path에 추가 (필요한 경우 주석 해제)
 # current_dir = os.path.dirname(os.path.abspath(__file__))
