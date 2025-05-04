@@ -165,7 +165,7 @@ async def send_timeblock_reminder(bot, timeblock: str):
 
 async def reminder_loop():
     while True:
-        await check_todo_reminders()
+        await check_todo_reminders(bot)
         await asyncio.sleep(600)
         
 def is_affirmative_confirmation(text: str) -> bool:
