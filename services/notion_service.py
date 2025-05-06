@@ -486,67 +486,86 @@ class NotionService:
 
     # --- ToDo Methods ---
     async def fetch_pending_todos(self) -> List[Dict[str, Any]]:
-        """완료되지 않은 오늘 할 일 목록 조회"""
+        """완료되지 않은 오늘 할 일 목록 조회 (반복 또는 오늘 날짜 기준)"""
         if not config.NOTION_TODO_DB_ID: return []
 
-        # Notion 속성 이름 확인 필수!
-        completion_prop_name = "완료 여부"
-        repeat_prop_name = "반복"
-        day_prop_name = "요일"
+        # --- Notion 속성 이름 확인 ---
+        completion_prop_name = "완료 여부" # 실제 이름 확인
+        repeat_prop_name = "반복"      # 실제 이름 확인
+        day_prop_name = "요일"         # 실제 이름 확인
 
         now = datetime.now(config.KST)
-        today_weekday = now.strftime("%a") # 예: 'Mon', 'Tue'
+        # today_weekday = now.strftime("%a") # 영어 약자 사용 시
+        # Notion의 Multi-select 옵션이 "월", "화", "수"... 형식이라면 아래 사용
+        korean_weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
+        today_weekday = korean_weekday_map[now.weekday()] # 실제 Notion 옵션 형식에 맞출 것
 
-        daily_filter = {"property": repeat_prop_name, "select": {"equals": "매일"}}
-        weekly_filter = {
-            "and": [
-                {"property": repeat_prop_name, "select": {"equals": "매주"}},
-                {"property": day_prop_name, "multi_select": {"contains": today_weekday}}
-            ]
-        }
-        # 날짜 필터 추가 (반복되지 않고 오늘 날짜인 항목)
-        date_prop_name = "날짜"
-        today_date_str = now.strftime("%Y-%m-%d")
-        no_repeat_today_filter = {
-             "and": [
-                 {"property": repeat_prop_name, "select": {"is_empty": True}},
-                 {"property": date_prop_name, "date": {"equals": today_date_str}}
-             ]
-        }
+        # today_date_str = now.strftime("%Y-%m-%d") # "날짜" 속성 안 쓰므로 필요 없음
 
-
-        query_payload = {
-             "filter": {
-                 "and": [
-                     {"property": completion_prop_name, "checkbox": {"equals": False}},
-                     {"or": [daily_filter, weekly_filter, no_repeat_today_filter]} # 매일, 매주(오늘), 오늘 할 일(반복X)
-                 ]
-             }
-             # 필요시 정렬 추가
-        }
-
+        # --- 필터 조건 생성 ---
         try:
-            # 페이지네이션 처리 추가 (결과가 100개 이상일 경우)
+            # 1. 매일 반복 필터
+            daily_filter = {"property": repeat_prop_name, "select": {"equals": "매일"}}
+
+            # 2. 매주 반복 (오늘 요일) 필터
+            weekly_filter = {
+                "and": [
+                    {"property": repeat_prop_name, "select": {"equals": "매주"}},
+                    {"property": day_prop_name, "multi_select": {"contains": today_weekday}}
+                ]
+            }
+
+            # 3. 날짜 지정 필터 (사용 안 함) - 해당 부분 제거됨
+            # no_repeat_today_filter = { ... } # 이 부분 삭제
+
+            # 최종 필터 조합
+            query_payload = {
+                 "filter": {
+                     "and": [
+                         # 조건 1: 완료되지 않음
+                         {"property": completion_prop_name, "checkbox": {"equals": False}},
+                         # 조건 2: 매일 반복이거나 오늘 요일인 매주 반복
+                         {"or": [
+                             daily_filter,
+                             weekly_filter
+                             # no_repeat_today_filter # <<< 여기에서 제거!
+                         ]}
+                     ]
+                 }
+                 # 필요시 정렬 추가
+            }
+        except Exception as filter_e:
+             logger.error(f"Error creating Notion filter payload: {filter_e}", exc_info=True)
+             return []
+
+        # ... (이하 API 호출 및 페이지네이션 로직 동일) ...
+        try:
             all_pending_todos = []
             start_cursor = None
             while True:
+                 current_payload = query_payload.copy()
                  if start_cursor:
-                     query_payload["start_cursor"] = start_cursor
+                     current_payload["start_cursor"] = start_cursor
 
-                 response = await self._request('POST', f'databases/{config.NOTION_TODO_DB_ID}/query', json=query_payload)
+                 response = await self._request('POST', f'databases/{config.NOTION_TODO_DB_ID}/query', json=current_payload)
                  results = response.get("results", [])
                  all_pending_todos.extend(results)
 
                  if response.get("has_more"):
                      start_cursor = response.get("next_cursor")
+                     logger.debug("Fetching next page of todos...")
                  else:
                      break
 
-            logger.info(f"Fetched {len(all_pending_todos)} total pending todo(s) for today.")
+            logger.info(f"Fetched {len(all_pending_todos)} total pending todo(s) based on repetition.")
             return all_pending_todos
 
         except NotionAPIError as e:
-            logger.error(f"Failed to fetch pending todos: {e}")
+            logger.error(f"Failed to fetch pending todos: Status={e.status_code}, Code={e.error_code}, Msg={e.message}")
+            logger.debug(f"Failed request payload: {query_payload}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching pending todos: {e}", exc_info=True)
             return []
 
     async def update_task_completion(self, page_id: str, is_done: bool):
