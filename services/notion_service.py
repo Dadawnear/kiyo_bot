@@ -486,21 +486,23 @@ class NotionService:
 
     # --- ToDo Methods ---
     async def fetch_pending_todos(self) -> List[Dict[str, Any]]:
-        """완료되지 않은 오늘 할 일 목록 조회 (반복 또는 오늘 날짜 기준)"""
-        if not config.NOTION_TODO_DB_ID: return []
+        """완료되지 않은 오늘 할 일 목록 조회 (반복 기준)"""
+        if not config.NOTION_TODO_DB_ID:
+            logger.warning("NOTION_TODO_DB_ID is not set. Cannot fetch todos.")
+            return []
 
-        # --- Notion 속성 이름 확인 ---
-        completion_prop_name = "완료 여부" # 실제 이름 확인
-        repeat_prop_name = "반복"      # 실제 이름 확인
-        day_prop_name = "요일"         # 실제 이름 확인
+        # --- Notion 속성 이름 (실제 DB와 일치하는지 확인!) ---
+        completion_prop_name = "완료 여부"
+        repeat_prop_name = "반복"
+        day_prop_name = "요일"
+        # date_prop_name = "날짜" # 사용 안 하므로 삭제됨
+        # --------------------------------------------------
 
         now = datetime.now(config.KST)
-        # today_weekday = now.strftime("%a") # 영어 약자 사용 시
-        # Notion의 Multi-select 옵션이 "월", "화", "수"... 형식이라면 아래 사용
-        korean_weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
-        today_weekday = korean_weekday_map[now.weekday()] # 실제 Notion 옵션 형식에 맞출 것
-
-        # today_date_str = now.strftime("%Y-%m-%d") # "날짜" 속성 안 쓰므로 필요 없음
+        # Notion "요일" 속성 옵션과 일치하도록 설정 ("월", "화", ... 또는 "Mon", "Tue", ...)
+        korean_weekday_map = ["월", "화", "수", "목", "금", "토", "일"] # 예시 (한글)
+        today_weekday = korean_weekday_map[now.weekday()]
+        # today_date_str = now.strftime("%Y-%m-%d") # 사용 안 하므로 삭제됨
 
         # --- 필터 조건 생성 ---
         try:
@@ -515,10 +517,9 @@ class NotionService:
                 ]
             }
 
-            # 3. 날짜 지정 필터 (사용 안 함) - 해당 부분 제거됨
-            # no_repeat_today_filter = { ... } # 이 부분 삭제
+            # 3. 날짜 지정 필터 (사용 안 하므로 정의 및 사용 부분 삭제됨)
 
-            # 최종 필터 조합
+            # 최종 필터 조합 (날짜 필터 제외)
             query_payload = {
                  "filter": {
                      "and": [
@@ -528,39 +529,50 @@ class NotionService:
                          {"or": [
                              daily_filter,
                              weekly_filter
-                             # no_repeat_today_filter # <<< 여기에서 제거!
+                             # no_repeat_today_filter 제거됨!
                          ]}
                      ]
                  }
-                 # 필요시 정렬 추가
             }
         except Exception as filter_e:
              logger.error(f"Error creating Notion filter payload: {filter_e}", exc_info=True)
-             return []
+             return [] # 필터 생성 오류 시 빈 리스트 반환
 
-        # ... (이하 API 호출 및 페이지네이션 로직 동일) ...
+        # --- API 호출 및 결과 처리 ---
         try:
             all_pending_todos = []
             start_cursor = None
-            while True:
-                 current_payload = query_payload.copy()
+            page_count = 0
+            max_pages = 10 # 무한 루프 방지용 최대 페이지 수
+
+            while page_count < max_pages: # 페이지 제한 추가
+                 current_payload = query_payload.copy() # 원본 payload 수정 방지
                  if start_cursor:
                      current_payload["start_cursor"] = start_cursor
+
+                 logger.debug(f"Sending Notion Query Payload to fetch todos (Page {page_count + 1}): {current_payload}")
 
                  response = await self._request('POST', f'databases/{config.NOTION_TODO_DB_ID}/query', json=current_payload)
                  results = response.get("results", [])
                  all_pending_todos.extend(results)
+                 page_count += 1
 
                  if response.get("has_more"):
                      start_cursor = response.get("next_cursor")
-                     logger.debug("Fetching next page of todos...")
+                     if not start_cursor: # next_cursor가 null이면 중단
+                          break
+                     logger.debug(f"Fetching next page of todos (Cursor: {start_cursor[:10]}...).")
                  else:
-                     break
+                     break # 더 이상 페이지 없으면 중단
+
+            if page_count >= max_pages and response.get("has_more"):
+                logger.warning(f"Stopped fetching todos after reaching max pages ({max_pages}). There might be more results.")
 
             logger.info(f"Fetched {len(all_pending_todos)} total pending todo(s) based on repetition.")
             return all_pending_todos
 
         except NotionAPIError as e:
+            # API 오류 시 상세 정보 로깅
             logger.error(f"Failed to fetch pending todos: Status={e.status_code}, Code={e.error_code}, Msg={e.message}")
             logger.debug(f"Failed request payload: {query_payload}")
             return []
