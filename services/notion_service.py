@@ -435,7 +435,7 @@ class NotionService:
             summary_prop_name: {"title": self._format_rich_text(summary)},
             text_prop_name: {"rich_text": self._format_rich_text(original_text)},
             date_prop_name: {"date": self._format_date(memory_date)},
-            category_prop_name: {"select": {"name": category}},
+            category_prop_name: {"multi_select": [{"name": category}]},
             status_prop_name: {"select": {"name": status}},
         }
         if tags:
