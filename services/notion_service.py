@@ -495,14 +495,12 @@ class NotionService:
         completion_prop_name = "완료 여부"
         repeat_prop_name = "반복"
         day_prop_name = "요일"
-        # date_prop_name = "날짜" # 사용 안 하므로 삭제됨
         # --------------------------------------------------
 
         now = datetime.now(config.KST)
         # Notion "요일" 속성 옵션과 일치하도록 설정 ("월", "화", ... 또는 "Mon", "Tue", ...)
         korean_weekday_map = ["월", "화", "수", "목", "금", "토", "일"] # 예시 (한글)
         today_weekday = korean_weekday_map[now.weekday()]
-        # today_date_str = now.strftime("%Y-%m-%d") # 사용 안 하므로 삭제됨
 
         # --- 필터 조건 생성 ---
         try:
@@ -517,7 +515,7 @@ class NotionService:
                 ]
             }
 
-            # 3. 날짜 지정 필터 (사용 안 하므로 정의 및 사용 부분 삭제됨)
+            # 3. 날짜 지정 필터 (사용 안 하므로 완전히 제거됨)
 
             # 최종 필터 조합 (날짜 필터 제외)
             query_payload = {
@@ -574,7 +572,7 @@ class NotionService:
         except NotionAPIError as e:
             # API 오류 시 상세 정보 로깅
             logger.error(f"Failed to fetch pending todos: Status={e.status_code}, Code={e.error_code}, Msg={e.message}")
-            logger.debug(f"Failed request payload: {query_payload}")
+            logger.debug(f"Failed request payload: {query_payload}") # 실패 시 사용된 페이로드 로깅
             return []
         except Exception as e:
             logger.error(f"Unexpected error fetching pending todos: {e}", exc_info=True)
