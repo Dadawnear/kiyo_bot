@@ -22,23 +22,20 @@ class GeneralCog(commands.Cog):
         self.bot = bot
 
     # --- Commands ---
-    @commands.command(name='cleanup', help='봇이 최근에 보낸 메시지를 지정한 개수만큼 삭제합니다. (대상 유저만 사용 가능)')
+    @commands.command(name='cleanup', help='봇이 최근에 보낸 메시지를 지정한 개수만큼 삭제하고, 관련 대화 기록도 일부 제거합니다.')
     async def cleanup_messages(self, ctx: commands.Context, limit: int = 1):
-        """봇의 최근 메시지를 삭제하는 명령어 (!cleanup [개수])"""
-        # is_target_user 헬퍼 사용
+        """봇의 최근 메시지를 삭제하고 관련 대화 기록 일부를 제거하는 명령어"""
         if not is_target_user(ctx.author):
             logger.debug(f"Cleanup command ignored from non-target user: {ctx.author}")
-            # 대상 유저 아니면 조용히 무시
             return
 
         if limit <= 0:
             await ctx.send("크크… 1 이상의 숫자를 알려줘야 해.", delete_after=10)
             return
-        if limit > 50: # 너무 많은 메시지 삭제 방지
-             await ctx.send("크크… 한 번에 너무 많이 지우려는 것 같아. 50개 이하로 해줘.", delete_after=10)
+        if limit > 25: # 한 번에 너무 많이 지우는 것 방지 (기존 50에서 줄임)
+             await ctx.send("크크… 한 번에 너무 많이 지우려는 것 같아. 25개 이하로 해줘.", delete_after=10)
              return
 
-        # 사용자 명령어 메시지 삭제 시도
         try:
             await ctx.message.delete()
         except (discord.Forbidden, discord.NotFound) as e:
@@ -47,25 +44,40 @@ class GeneralCog(commands.Cog):
         deleted_count = 0
         try:
             # 채널 기록 확인 및 봇 메시지 삭제
-            async for message in ctx.channel.history(limit=limit * 5): # 충분히 가져옴
+            # limit * 5 보다 좀 더 보수적으로 가져와서 봇 메시지만 카운트
+            async for message in ctx.channel.history(limit=limit * 10):
                 if message.author == self.bot.user:
                     try:
                         await message.delete()
                         deleted_count += 1
-                        # logger.debug(f"Deleted bot message: {message.id} in channel {ctx.channel.id}")
                         if deleted_count >= limit:
                             break
                     except (discord.Forbidden, discord.NotFound) as e:
                          logger.warning(f"Could not delete bot message {message.id}: {e}")
                     except discord.HTTPException as e:
                         logger.error(f"Failed to delete message {message.id} due to HTTP error: {e}")
-                        await asyncio.sleep(1) # 잠시 대기 후 계속 시도? 여기서는 일단 중단
+                        # API 오류 시 잠시 대기 후 다음 메시지 시도 또는 중단 결정 가능
+                        await asyncio.sleep(1) # 간단히 1초 대기
 
             await ctx.send(f"크크… 내 메시지 {deleted_count}개를 정리했어.", delete_after=5)
             logger.info(f"Cleaned up {deleted_count} bot messages in channel {ctx.channel.id} by {ctx.author}")
 
-            # conversation_log 수정은 여기서 하지 않음 (메시지 ID 기반으로 정확히 하려면 복잡)
-            logger.warning("Cleanup command deleted messages but did not modify the conversation log state.")
+            # --- conversation_log 수정 로직 추가 ---
+            if deleted_count > 0:
+                channel_id = ctx.channel.id
+                # KiyoBot 클래스에 구현된 get_conversation_log 사용
+                log = self.bot.get_conversation_log(channel_id)
+                if log: # 로그가 있는 경우에만 처리
+                    # 삭제된 봇 메시지 수의 2배만큼 최근 로그 항목 제거 (사용자-봇 쌍으로 가정)
+                    # (주의: 이 방식은 완벽하지 않으며, 상황에 따라 정확하지 않을 수 있음)
+                    entries_to_remove_from_log = min(len(log), deleted_count * 2)
+
+                    if entries_to_remove_from_log > 0:
+                        # KiyoBot 클래스의 conversation_logs를 직접 수정
+                        self.bot.conversation_logs[channel_id] = log[:-entries_to_remove_from_log]
+                        logger.info(f"Removed last {entries_to_remove_from_log} entries from conversation log for channel {channel_id} due to cleanup.")
+                else:
+                    logger.info(f"Conversation log for channel {channel_id} is empty. No log entries removed.")
 
         except Exception as e:
             logger.error(f"Error during cleanup command processing: {e}", exc_info=True)
