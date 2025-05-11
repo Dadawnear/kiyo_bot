@@ -146,8 +146,12 @@ async def _job_reset_daily_todos(bot: 'KiyoBot'):
     except Exception as e:
         logger.error(f"[Scheduler] Error in job _job_reset_daily_todos: {e}", exc_info=True)
 
+# 시간대 순서 정의 (누적 알림용)
+ORDERED_TIMEBLOCKS = ["아침", "점심", "저녁", "밤"] # Notion의 "시간대" 속성 옵션과 일치해야 함
+REMINDER_COOLDOWN_HOURS = 3 # 최소 리마인더 간격 (시간)
+
 async def _job_check_reminders(bot: 'KiyoBot'):
-    """주기적으로 할 일 리마인더 확인 및 발송 (시간 지정된 항목)"""
+    """주기적으로 시간 지정된 할 일 리마인더 확인 및 발송"""
     logger.info("[Scheduler] Running job: Check Specific Time Reminders")
     dm_channel = await _get_target_user_dm(bot)
     if not dm_channel: return
@@ -155,131 +159,137 @@ async def _job_check_reminders(bot: 'KiyoBot'):
     try:
         pending_todos = await bot.notion_service.fetch_pending_todos()
         if not pending_todos:
-            logger.info("[Scheduler] No pending todos found.")
+            logger.debug("[Scheduler] No pending todos found by fetch_pending_todos for specific time reminders.")
             return
 
         now = datetime.now(config.KST)
-        today_start = datetime.combine(now.date(), time.min, tzinfo=config.KST)
         reminders_sent_count = 0
 
         for todo in pending_todos:
-            page_id = todo.get("id")
+            page_id = todo.get("id"); props = todo.get("properties", {})
             if not page_id: continue
 
-            props = todo.get("properties", {})
             title_list = props.get("할 일", {}).get("title", [])
             task_name = title_list[0].get("plain_text", "...") if title_list else "..."
 
             # 구체적인 시간 확인
             time_str_list = props.get("구체적인 시간", {}).get("rich_text", [])
-            parsed_time = None
-            if time_str_list:
-                parsed_time = parse_time_string(time_str_list[0].get("plain_text", "").strip())
+            if not time_str_list or not time_str_list[0].get("plain_text", "").strip():
+                continue # 시간이 지정되지 않은 항목은 이 작업에서 제외
 
-            # 시간이 지정되었고, 현재 시간 이전인 경우 리마인드 대상
-            if parsed_time and parsed_time <= now.time():
-                # 리마인더 재전송 방지 로직 (Notion 속성 "마지막 리마인드" 확인)
-                # Notion 속성 이름 확인 필수!
-                last_reminded_prop = props.get("마지막 리마인드", {}).get("date", {})
+            parsed_time = parse_time_string(time_str_list[0].get("plain_text", "").strip())
+
+            if parsed_time and parsed_time <= now.time(): # 시간이 지났다면
+                # "마지막 리마인드" 시간 확인
                 last_reminded_at = None
+                last_reminded_prop = props.get("마지막 리마인드", {}).get("date", {})
                 if last_reminded_prop and last_reminded_prop.get("start"):
-                     try:
-                         # Notion 날짜/시간은 ISO 8601 형식 (UTC 또는 오프셋 포함)
-                         last_reminded_at = datetime.fromisoformat(last_reminded_prop["start"])
-                         # KST로 변환 (만약 시간대 정보가 없다면 KST로 가정)
-                         if last_reminded_at.tzinfo is None:
-                              last_reminded_at = config.KST.localize(last_reminded_at)
-                         else:
-                              last_reminded_at = last_reminded_at.astimezone(config.KST)
-                     except ValueError:
-                          logger.warning(f"[Scheduler] Failed to parse '마지막 리마인드' date for {page_id}: {last_reminded_prop.get('start')}")
+                    try:
+                        last_reminded_at = datetime.fromisoformat(last_reminded_prop["start"])
+                        if last_reminded_at.tzinfo is None: last_reminded_at = config.KST.localize(last_reminded_at)
+                        else: last_reminded_at = last_reminded_at.astimezone(config.KST)
+                    except ValueError: pass
 
-                # 오늘 이미 리마인드를 보냈다면 건너뛰기
-                if last_reminded_at and last_reminded_at >= today_start:
-                    logger.debug(f"[Scheduler] Already reminded task '{task_name}' today ({last_reminded_at}). Skipping.")
+                # 최근 N시간 내에 알림 보냈으면 건너뛰기
+                if last_reminded_at and (now - last_reminded_at) < timedelta(hours=REMINDER_COOLDOWN_HOURS):
+                    logger.debug(f"[Scheduler] Task '{task_name}' ({page_id}) reminded recently at {last_reminded_at}. Skipping specific time reminder.")
                     continue
 
-                # 리마인더 발송
                 logger.info(f"[Scheduler] Sending reminder for specific time task: '{task_name}' (Page ID: {page_id})")
                 try:
                     reminder_text = await bot.ai_service.generate_reminder_dialogue(task_name)
-                    # ReminderView 생성 (Cog에서 임포트, NotionService 전달)
                     view = ReminderView(notion_page_id=page_id, task_name=task_name, notion_service=bot.notion_service)
                     await dm_channel.send(reminder_text, view=view)
                     reminders_sent_count += 1
-
-                    # Notion에 리마인더 전송 시간 기록 (새로운 NotionService 메소드 필요 가정)
-                    # await bot.notion_service.mark_reminder_timestamp(page_id, now)
-                    logger.debug(f"[Scheduler] Reminder sent for {page_id}. Notion timestamp update needed.") # TODO
-
-                    await asyncio.sleep(1) # Rate limit 방지
+                    await bot.notion_service.update_task_last_reminded_at(page_id, now) # 리마인드 시간 기록
+                    await asyncio.sleep(1)
                 except Exception as send_e:
                      logger.error(f"[Scheduler] Failed to send reminder for task '{task_name}' ({page_id}): {send_e}")
-
-        logger.info(f"[Scheduler] Finished checking specific time reminders. Sent: {reminders_sent_count}")
+        if reminders_sent_count > 0:
+            logger.info(f"[Scheduler] Sent {reminders_sent_count} specific time reminder(s).")
 
     except Exception as e:
         logger.error(f"[Scheduler] Error in job _job_check_reminders: {e}", exc_info=True)
 
-async def _job_send_timeblock_reminder(bot: 'KiyoBot', timeblock: str):
-    """시간대별 할 일 리마인더 발송 (시간 미지정 항목)"""
-    logger.info(f"[Scheduler] Running job: Send Timeblock Reminder ({timeblock})")
+
+async def _job_send_timeblock_reminder(bot: 'KiyoBot', current_timeblock_name: str):
+    """시간대별 누적 할 일 리마인더 발송 (시간 미지정 항목)"""
+    logger.info(f"[Scheduler] Running job: Send Cumulative Timeblock Reminder for '{current_timeblock_name}'")
     dm_channel = await _get_target_user_dm(bot)
     if not dm_channel: return
 
     try:
         pending_todos = await bot.notion_service.fetch_pending_todos()
-        if not pending_todos: return
+        if not pending_todos:
+            logger.debug("[Scheduler] No pending todos found by fetch_pending_todos for timeblock reminder.")
+            return
 
-        now_date = datetime.now(config.KST).date()
-        timeblock_todos = []
-        pages_to_mark = [] # 리마인더 보낸 후 상태 업데이트할 페이지 ID 목록
+        now = datetime.now(config.KST)
+        cumulative_tasks_for_reminder = [] # 이번 리마인더에 포함될 태스크 이름 목록
+        pages_to_update_reminded_time = [] # 리마인더 보낸 후 "마지막 리마인드" 시간 업데이트할 페이지 ID 목록
+
+        # 현재 시간대까지의 모든 시간대 식별
+        try:
+            current_timeblock_index = ORDERED_TIMEBLOCKS.index(current_timeblock_name)
+            relevant_timeblocks = ORDERED_TIMEBLOCKS[:current_timeblock_index + 1]
+        except ValueError:
+            logger.error(f"[Scheduler] Invalid timeblock name '{current_timeblock_name}' provided.")
+            return
+
+        logger.debug(f"[Scheduler] Relevant timeblocks for '{current_timeblock_name}' reminder: {relevant_timeblocks}")
 
         for todo in pending_todos:
-            page_id = todo.get("id")
+            page_id = todo.get("id"); props = todo.get("properties", {})
             if not page_id: continue
-            props = todo.get("properties", {})
 
-            # 시간 미지정 확인
+            # 시간이 지정된 항목은 제외
             time_str_list = props.get("구체적인 시간", {}).get("rich_text", [])
             if time_str_list and time_str_list[0].get("plain_text", "").strip():
-                continue # 시간이 지정된 항목은 제외
+                continue
 
-            # 시간대 확인 ("시간대" 속성 이름 확인!)
-            todo_timeblock_prop = props.get("시간대", {}).get("select")
-            todo_timeblock = todo_timeblock_prop.get("name") if todo_timeblock_prop else None
+            # 할 일의 "시간대" 속성 값 가져오기
+            task_timeblock_prop = props.get("시간대", {}).get("select") # Notion 속성 이름 확인!
+            task_timeblock = task_timeblock_prop.get("name") if task_timeblock_prop else None
 
-            if todo_timeblock == timeblock:
-                # 리마인더 재전송 방지 (Notion 속성 "오늘 리마인드" 체크박스 확인)
-                # Notion 속성 이름 확인 필수!
-                reminded_today_prop = props.get("오늘 리마인드", {}).get("checkbox", False)
-                if reminded_today_prop:
-                    logger.debug(f"[Scheduler] Already sent timeblock reminder for '{timeblock}' task {page_id} today. Skipping.")
+            if task_timeblock and task_timeblock in relevant_timeblocks:
+                # "마지막 리마인드" 시간 확인
+                last_reminded_at = None
+                last_reminded_prop = props.get("마지막 리마인드", {}).get("date", {})
+                if last_reminded_prop and last_reminded_prop.get("start"):
+                    try:
+                        last_reminded_at = datetime.fromisoformat(last_reminded_prop["start"])
+                        if last_reminded_at.tzinfo is None: last_reminded_at = config.KST.localize(last_reminded_at)
+                        else: last_reminded_at = last_reminded_at.astimezone(config.KST)
+                    except ValueError: pass
+
+                # 최근 N시간 내에 알림 보냈으면 건너뛰기
+                if last_reminded_at and (now - last_reminded_at) < timedelta(hours=REMINDER_COOLDOWN_HOURS):
+                    logger.debug(f"[Scheduler] Task for timeblock '{task_timeblock}' ({page_id}) reminded recently at {last_reminded_at}. Skipping.")
                     continue
 
                 title_list = props.get("할 일", {}).get("title", [])
                 task_name = title_list[0].get("plain_text", "...") if title_list else "..."
-                timeblock_todos.append(task_name)
-                pages_to_mark.append(page_id)
+                cumulative_tasks_for_reminder.append(task_name)
+                pages_to_update_reminded_time.append(page_id)
 
-        if timeblock_todos:
-            reminder_text = await bot.ai_service.generate_timeblock_reminder_gpt(timeblock, timeblock_todos)
-            await dm_channel.send(reminder_text)
-            logger.info(f"[Scheduler] Sent timeblock reminder for '{timeblock}' with {len(timeblock_todos)} tasks.")
+        if cumulative_tasks_for_reminder:
+            # AI 프롬프트에 현재 시간대 이름 대신 좀 더 일반적인 문구 전달 가능
+            # 예: current_timeblock_display_name = f"{current_timeblock_name} (누적)"
+            reminder_text = await bot.ai_service.generate_timeblock_reminder_gpt(
+                current_time_display_name=f"{current_timeblock_name}까지의 현황", # AI에게 전달할 시간대 표현
+                todo_titles=cumulative_tasks_for_reminder
+            )
+            await dm_channel.send(reminder_text) # 시간대별 누적 리마인더에는 버튼 미포함 (메시지만)
+            logger.info(f"[Scheduler] Sent cumulative timeblock reminder for '{current_timeblock_name}' with {len(cumulative_tasks_for_reminder)} tasks.")
 
-            # 리마인더 전송 완료 상태 업데이트 (Notion "오늘 리마인드" 체크)
-            # TODO: NotionService에 체크박스 업데이트 메소드 추가 필요
-            # update_tasks = [bot.notion_service.mark_timeblock_reminded(pid, True) for pid in pages_to_mark]
-            # await asyncio.gather(*update_tasks, return_exceptions=True)
-            logger.debug(f"[Scheduler] Timeblock reminder sent for {len(pages_to_mark)} pages. Notion update needed.") # TODO
+            # 리마인더 전송된 할 일들의 "마지막 리마인드" 시간 업데이트
+            update_tasks = [bot.notion_service.update_task_last_reminded_at(pid, now) for pid in pages_to_update_reminded_time]
+            await asyncio.gather(*update_tasks, return_exceptions=True) # 오류 발생해도 계속 진행
         else:
-            logger.info(f"[Scheduler] No pending tasks found for timeblock '{timeblock}' requiring reminder.")
-
-        # 자정에 "오늘 리마인드" 체크박스 초기화 필요 (_job_reset_daily_todos 에 추가)
+            logger.info(f"[Scheduler] No pending tasks found for cumulative reminder up to '{current_timeblock_name}'.")
 
     except Exception as e:
-        logger.error(f"[Scheduler] Error in job _job_send_timeblock_reminder ({timeblock}): {e}", exc_info=True)
-
+        logger.error(f"[Scheduler] Error in job _job_send_timeblock_reminder ({current_timeblock_name}): {e}", exc_info=True)
 
 # --- Scheduler Setup ---
 _scheduler: Optional[AsyncIOScheduler] = None
