@@ -7,6 +7,7 @@ from datetime import datetime
 import random
 import difflib
 from typing import List, Tuple, Optional, Dict, Any
+import json
 
 import config # 설정 임포트
 # utils 임포트 (필요시)
@@ -54,62 +55,53 @@ class AIService:
         self.user_names_for_prompt = ["정서영", "서영", "너"] # 프롬프트 내 호칭 예시
         # 최근 기억/관찰 내용을 어디서 가져올지 결정 필요 (NotionService 연동 또는 외부 주입)
 
-    async def _call_llm(self, messages: List[Dict[str, Any]], model: Optional[str] = None, temperature: float = 0.7, max_tokens: Optional[int] = None) -> str:
+    async def _call_llm(self, messages: List[Dict[str, Any]], model: Optional[str] = None, temperature: float = 0.7, max_tokens: Optional[int] = None, response_format: Optional[Dict[str, str]] = None) -> str:
         """LLM API 호출 (OpenAI 또는 SillyTavern)"""
         if self.use_sillytavern:
-            # --- SillyTavern 호출 ---
-            payload = {
-                "model": self.sillytavern_model, # SillyTavern 설정에서 모델 이름 사용
-                "messages": messages,
-                "temperature": temperature,
-                # SillyTavern이 max_tokens를 지원하는지 확인 필요
-                # "max_tokens": max_tokens if max_tokens else 1500 # 기본값 설정 예시
-            }
+            payload = {"model": self.sillytavern_model, "messages": messages, "temperature": temperature}
+            if max_tokens: payload["max_tokens"] = max_tokens
+            if response_format and response_format.get("type") == "json_object":
+                 logger.warning("SillyTavern may not reliably support JSON response format. The prompt must guide it.")
+                 # SillyTavern의 경우, 프롬프트 자체에 JSON으로 응답하라는 강력한 지시가 필요합니다.
+
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post(self.sillytavern_url, json=payload) as resp:
+                    logger.debug(f"Sending request to SillyTavern: {self.sillytavern_url}")
+                    async with session.post(self.sillytavern_url, json=payload, timeout=120) as resp:
                         if resp.status == 200:
-                            result = await resp.json()
-                            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+                            result = await resp.json(); content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
                             logger.debug(f"SillyTavern API response received. Length: {len(content)}")
                             return content.strip()
-                        else:
-                            error_text = await resp.text()
-                            logger.error(f"SillyTavern API error ({resp.status}): {error_text}")
-                            return "크크… 지금은 SillyTavern과 연결이 불안정한 것 같아."
-            except aiohttp.ClientError as e:
-                logger.error(f"SillyTavern API connection error: {e}", exc_info=True)
-                return "크크… SillyTavern 서버에 접속할 수 없어."
-            except Exception as e:
-                 logger.error(f"Error calling SillyTavern API: {e}", exc_info=True)
-                 return "크크… SillyTavern API 호출 중 예상치 못한 오류가 발생했어."
+                        else: error_text = await resp.text(); logger.error(f"SillyTavern API error ({resp.status}): {error_text[:500]}"); return "크크… 지금은 SillyTavern과 연결이 불안정한 것 같아."
+            except aiohttp.ClientError as e: logger.error(f"SillyTavern API connection error: {e}", exc_info=True); return "크크… SillyTavern 서버에 접속할 수 없어."
+            except asyncio.TimeoutError: logger.error("SillyTavern API request timed out."); return "크크… SillyTavern 응답이 너무 오래 걸리는 것 같아."
+            except Exception as e: logger.error(f"Error calling SillyTavern API: {e}", exc_info=True); return "크크… SillyTavern API 호출 중 예상치 못한 오류가 발생했어."
 
         elif self.openai_client:
-            # --- OpenAI 호출 ---
             chosen_model = model or config.DEFAULT_LLM_MODEL
+            # OpenAI의 JSON 모드는 특정 모델에서만 지원될 수 있습니다 (예: gpt-3.5-turbo-1106, gpt-4-turbo-preview 등)
+            # chosen_model = "gpt-4-turbo-preview" # JSON 모드 사용 시 모델 변경 고려
             try:
-                completion_params = {
-                    "model": chosen_model,
-                    "messages": messages,
-                    "temperature": temperature,
-                }
-                if max_tokens:
-                    completion_params["max_tokens"] = max_tokens
-
+                completion_params = {"model": chosen_model, "messages": messages, "temperature": temperature}
+                if max_tokens: completion_params["max_tokens"] = max_tokens
+                if response_format: # OpenAI JSON 모드 활성화
+                    completion_params["response_format"] = response_format
+                
+                logger.debug(f"Sending request to OpenAI API. Model: {chosen_model}, Params: {completion_params}")
                 response = await self.openai_client.chat.completions.create(**completion_params)
-                content = response.choices[0].message.content
-                logger.debug(f"OpenAI API response received. Model: {chosen_model}, Length: {len(content)}")
-                return content.strip()
+                content = response.choices[0].message.content; token_usage = response.usage
+                logger.debug(f"OpenAI API response received. Model: {chosen_model}, Length: {len(content or '')}, Tokens: {token_usage}")
+                return (content or "").strip()
             except OpenAIError as e:
-                logger.error(f"OpenAI API error: {e}", exc_info=True)
+                # OpenAI API 오류 상세 로깅
+                err_body = e.body.get('error', {}) if hasattr(e, 'body') and isinstance(e.body, dict) else {}
+                err_type = err_body.get('type', 'unknown_type')
+                err_param = err_body.get('param')
+                logger.error(f"OpenAI API error: Status={e.status_code}, Type={err_type}, Param={err_param}, Message={e.message}", exc_info=True)
                 return f"크크… OpenAI API 호출 중 오류가 발생했어. ({e.status_code if hasattr(e, 'status_code') else 'Unknown'})"
-            except Exception as e:
-                logger.error(f"Error calling OpenAI API: {e}", exc_info=True)
-                return "크크… OpenAI API 호출 중 예상치 못한 오류가 발생했어."
-        else:
-            # 둘 다 사용할 수 없는 경우
-            logger.error("No LLM backend available (OpenAI or SillyTavern).")
-            return "크크… 지금은 생각을 정리할 수가 없네. (LLM 설정 오류)"
+            except asyncio.TimeoutError: logger.error("OpenAI API request timed out."); return "크크… OpenAI 응답이 너무 오래 걸리는 것 같아."
+            except Exception as e: logger.error(f"Error calling OpenAI API: {e}", exc_info=True); return "크크… OpenAI API 호출 중 예상치 못한 오류가 발생했어."
+        else: logger.error("No LLM backend available (OpenAI or SillyTavern)."); return "크크… 지금은 생각을 정리할 수가 없네. (LLM 설정 오류)"
 
     async def get_current_weather_desc(self) -> Optional[str]:
         """날씨 정보 가져오기 (간단한 경우 여기에, 복잡하면 WeatherService 분리)"""
@@ -530,6 +522,96 @@ class AIService:
         initiate_message = await self._call_llm(messages, temperature=0.8, max_tokens=100)
         # 응답이 여러 문장일 경우 첫 문장만 사용하고 앞뒤 공백 제거
         return initiate_message.strip().split('\n')[0]
+
+    async def extract_task_and_date(self, user_message: str) -> Optional[Dict[str, Any]]:
+        """
+        사용자 메시지에서 할 일 내용과 날짜 관련 표현을 추출하여 JSON 형식으로 반환합니다.
+        OpenAI의 JSON 모드를 활용합니다.
+        """
+        if not self.openai_client: # JSON 모드는 OpenAI에서 더 안정적으로 지원될 가능성
+            logger.warning("OpenAI client not available for task and date extraction with JSON mode.")
+            # SillyTavern으로 시도하거나, 혹은 기본 파싱 로직(정규식 등)을 여기에 추가할 수 있음
+            # 여기서는 OpenAI 클라이언트가 없을 경우 None 반환
+            return None
+
+        logger.debug(f"Attempting to extract task and date from user message: '{user_message}'")
+
+        system_prompt = (
+            "You are an AI assistant specialized in parsing Korean text to extract task descriptions and due date information. "
+            "The user is '정서영'. Your goal is to identify what needs to be done and any mention of when it should be done. "
+            "Respond ONLY with a JSON object containing two keys: \"task_description\" and \"due_date_description\".\n"
+            "- \"task_description\": A string containing the core action or task. If no specific task is identifiable, use null.\n"
+            "- \"due_date_description\": A string representing the due date or time exactly as mentioned by the user (e.g., \"내일\", \"다음주 월요일 저녁\", \"모레 오후 3시\", \"5월 20일\"). This is a textual representation. If no due date is mentioned, use null.\n"
+            "Do not add any explanations or text outside the JSON object. If the input seems like a casual conversation not containing a task, return null for both fields.\n\n"
+            "Examples:\n"
+            "User: \"내일 아침 9시에 산책 가기 할 일로 등록해줘\"\n"
+            "Assistant: {\"task_description\": \"산책 가기\", \"due_date_description\": \"내일 아침 9시\"}\n\n"
+            "User: \"다음 주 수요일까지 보고서 마감이야\"\n"
+            "Assistant: {\"task_description\": \"보고서 마감\", \"due_date_description\": \"다음 주 수요일\"}\n\n"
+            "User: \"영화 예매. 이번주 금요일 저녁으로.\"\n"
+            "Assistant: {\"task_description\": \"영화 예매\", \"due_date_description\": \"이번주 금요일 저녁\"}\n\n"
+            "User: \"5월 20일에 친구랑 약속 있어\"\n"
+            "Assistant: {\"task_description\": \"친구랑 약속\", \"due_date_description\": \"5월 20일\"}\n\n"
+            "User: \"그냥 오늘 뭐 먹을지 고민 중이야\"\n"
+            "Assistant: {\"task_description\": null, \"due_date_description\": null}\n\n"
+            "User: \"시장 가서 장보기\"\n" # 날짜 언급 없음
+            "Assistant: {\"task_description\": \"시장 가서 장보기\", \"due_date_description\": null}"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        # JSON 모드 요청 (gpt-3.5-turbo-1106 이상, gpt-4-turbo-preview 등 지원)
+        # 사용 중인 DEFAULT_LLM_MODEL이 JSON 모드를 지원하는지 확인 필요
+        # 지원하지 않는 모델이면 response_format 없이 호출하고, Python에서 파싱 시도해야 함.
+        # 여기서는 gpt-4o 또는 gpt-4-turbo-preview가 기본이라고 가정.
+        json_mode_compatible_model = config.DEFAULT_LLM_MODEL
+        if "gpt-3.5-turbo-0125" in json_mode_compatible_model or "gpt-4-turbo" in json_mode_compatible_model or "gpt-4o" in json_mode_compatible_model:
+            # 최신 모델들은 대부분 지원
+             pass
+        elif "gpt-3.5-turbo" in json_mode_compatible_model and "1106" not in json_mode_compatible_model : # 구형 3.5 터보는 지원 안함
+             logger.warning(f"Model {chosen_model} might not support JSON mode reliably. Parsing might fail.")
+             # 필요시 모델 강제 변경 또는 response_format 제거
+             # json_mode_compatible_model = "gpt-4-turbo-preview" # 예시
+
+        try:
+            response_str = await self._call_llm(
+                messages,
+                model=json_mode_compatible_model, # JSON 모드 지원 가능성 높은 모델 사용
+                temperature=0.2, # 정확한 추출을 위해 온도 낮춤
+                max_tokens=150,  # JSON 응답은 보통 짧음
+                response_format={"type": "json_object"} # OpenAI JSON 모드 요청
+            )
+
+            if not response_str or response_str.startswith("크크…"): # LLM 호출 실패 시
+                logger.error(f"LLM call failed during task extraction: {response_str}")
+                return None
+
+            logger.debug(f"Raw JSON response for task extraction: {response_str}")
+            parsed_response = json.loads(response_str)
+
+            task_desc = parsed_response.get("task_description")
+            due_date_desc = parsed_response.get("due_date_description")
+
+            # 둘 다 null이거나 비어있으면 유효한 작업으로 보지 않음 (선택적)
+            if not task_desc and not due_date_desc:
+                 logger.info(f"No task or due date extracted from: '{user_message}'")
+                 return None
+            if isinstance(task_desc, str) and not task_desc.strip(): task_desc = None # 빈 문자열이면 None
+            if isinstance(due_date_desc, str) and not due_date_desc.strip(): due_date_desc = None # 빈 문자열이면 None
+
+
+            logger.info(f"Extracted task: '{task_desc}', Due date desc: '{due_date_desc}' from message: '{user_message}'")
+            return {"task_description": task_desc, "due_date_description": due_date_desc}
+
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse LLM response as JSON for task extraction. Response: {response_str}", exc_info=True)
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error during task and date extraction: {e}", exc_info=True)
+            return None
 
 
 # AIService 인스턴스 생성 (싱글턴처럼 사용 가능)
