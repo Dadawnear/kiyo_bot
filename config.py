@@ -79,6 +79,7 @@ NOTION_DIARY_DB_ID = os.getenv("NOTION_DATABASE_ID")
 NOTION_OBSERVATION_DB_ID = os.getenv("NOTION_OBSERVATION_DB_ID")
 NOTION_MEMORY_DB_ID = os.getenv("NOTION_MEMORY_DB_ID")
 NOTION_TODO_DB_ID = os.getenv("TODO_DATABASE_ID")
+NOTION_SCHEDULE_DB_ID = os.getenv("NOTION_SCHEDULE_ID")
 
 if not all([NOTION_DIARY_DB_ID, NOTION_OBSERVATION_DB_ID, NOTION_MEMORY_DB_ID, NOTION_TODO_DB_ID]):
     logging.warning("하나 이상의 Notion 데이터베이스 ID 환경변수가 설정되지 않았습니다. Notion 연동 기능이 제한될 수 있습니다.")
