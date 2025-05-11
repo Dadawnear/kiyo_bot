@@ -592,73 +592,100 @@ class NotionService:
             logger.error(f"Failed to update task completion for {page_id}: {e}")
             return False
 
-    async def reset_daily_todos(self):
-        """매일 자정에 반복 할 일들의 완료 여부를 False로 초기화"""
-        if not config.NOTION_TODO_DB_ID:
-            logger.warning("NOTION_TODO_DB_ID not set. Cannot reset daily todos.")
-            return
+    async def update_task_last_reminded_at(self, page_id: str, remind_time: Optional[datetime]):
+        """할 일의 '마지막 리마인드' 시간을 업데이트하거나 초기화합니다."""
+        if not page_id: return False
+        # Notion DB에 '마지막 리마인드'라는 이름의 '날짜' 타입 속성이 있다고 가정
+        last_reminded_prop_name = "마지막 리마인드" # << 실제 Notion 속성 이름 확인!
 
-        logger.info("Starting daily todo reset process...")
-        # Notion 속성 이름 확인 필수!
+        if remind_time:
+            # 시간 정보를 포함하여 ISO 형식으로 변환 (UTC로 변환 안 해도 Notion이 KST로 인식 가능성 있음)
+            # 또는 명시적으로 UTC로 변환: remind_time.astimezone(timezone.utc).isoformat()
+            date_payload = {"start": remind_time.isoformat()}
+        else: # None이 전달되면 속성 값을 비움
+            date_payload = None
+
+        payload = {
+            "properties": {
+                last_reminded_prop_name: {"date": date_payload}
+            }
+        }
+        try:
+            await self._request('PATCH', f'pages/{page_id}', json=payload)
+            if remind_time:
+                logger.info(f"Updated '{last_reminded_prop_name}' for task {page_id} to {remind_time.strftime('%Y-%m-%d %H:%M')}")
+            else:
+                logger.info(f"Cleared '{last_reminded_prop_name}' for task {page_id}")
+            return True
+        except NotionAPIError as e:
+            logger.error(f"Failed to update '{last_reminded_prop_name}' for {page_id}: {e}")
+            return False
+
+    async def reset_daily_todos(self):
+        """매일 자정에 반복 할 일들의 완료 여부 및 마지막 리마인드 시간 초기화"""
+        # ... (기존 reset_daily_todos의 쿼리 및 페이지 가져오는 로직은 유사) ...
+        logger.info("Starting daily todo reset process (including last reminded time)...")
         completion_prop_name = "완료 여부"
         repeat_prop_name = "반복"
         day_prop_name = "요일"
+        # last_reminded_prop_name = "마지막 리마인드" # reset_task에서 사용
 
         now = datetime.now(config.KST)
-        today_weekday = now.strftime("%a")
+        today_weekday = config.korean_weekday_map[now.weekday()] # config에서 가져오도록 수정 가정
 
-        query_payload = {
+        query_payload = { # 완료된 반복 할 일들 조회
             "filter": {
                 "and": [
-                    {"property": completion_prop_name, "checkbox": {"equals": True}}, # 완료된 항목 대상
+                    {"property": completion_prop_name, "checkbox": {"equals": True}},
                     {"or": [
                         {"property": repeat_prop_name, "select": {"equals": "매일"}},
-                        {
-                            "and": [
-                                {"property": repeat_prop_name, "select": {"equals": "매주"}},
-                                {"property": day_prop_name, "multi_select": {"contains": today_weekday}}
-                            ]
-                        }
+                        {"and": [
+                            {"property": repeat_prop_name, "select": {"equals": "매주"}},
+                            {"property": day_prop_name, "multi_select": {"contains": today_weekday}}
+                        ]}
                     ]}
                 ]
             }
         }
         reset_count = 0
         try:
-            # 페이지네이션 처리
-            pages_to_reset = []
+            pages_to_reset = [] # 페이지네이션 처리하며 모든 대상 페이지 수집
             start_cursor = None
             while True:
-                 if start_cursor:
-                     query_payload["start_cursor"] = start_cursor
-                 response = await self._request('POST', f'databases/{config.NOTION_TODO_DB_ID}/query', json=query_payload)
-                 results = response.get("results", [])
-                 pages_to_reset.extend(results)
-                 if response.get("has_more"):
-                     start_cursor = response.get("next_cursor")
-                 else:
-                     break
+                current_payload = query_payload.copy()
+                if start_cursor: current_payload["start_cursor"] = start_cursor
+                response = await self._request('POST', f'databases/{config.NOTION_TODO_DB_ID}/query', json=current_payload)
+                results = response.get("results", [])
+                pages_to_reset.extend(results)
+                if response.get("has_more"): start_cursor = response.get("next_cursor"); else: break
 
             if not pages_to_reset:
                 logger.info("No completed repeating todos found to reset.")
                 return
 
-            tasks = [self.update_task_completion(page.get("id"), False) for page in pages_to_reset if page.get("id")]
+            async def reset_task(page_data):
+                page_id = page_data.get("id")
+                if not page_id: return False
+                # 완료 여부 False로, 마지막 리마인드 시간 null로 업데이트
+                # update_task_completion은 완료 여부만, update_task_last_reminded_at은 리마인드 시간만
+                # 두 개를 한 번에 업데이트하는 API가 Notion에 없으므로, 개별 호출 또는 통합 메소드 필요
+                # 여기서는 두 번 호출하는 것으로 가정 (비효율적일 수 있으나 간단)
+                # 또는 update_task_completion에서 last_reminded_at도 초기화하도록 수정
+                comp_success = await self.update_task_completion(page_id, False)
+                rem_success = await self.update_task_last_reminded_at(page_id, None) # 리마인드 시간 초기화
+                return comp_success and rem_success
+
+
+            tasks = [reset_task(page) for page in pages_to_reset]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for i, result in enumerate(results):
                 page_id = pages_to_reset[i].get("id")
-                if isinstance(result, Exception):
-                    logger.error(f"Failed to reset todo {page_id}: {result}")
-                elif result is True:
-                    reset_count += 1
-
-            logger.info(f"Successfully reset {reset_count} out of {len(pages_to_reset)} repeating todos.")
-
-        except NotionAPIError as e:
-            logger.error(f"Error during daily todo reset query: {e}")
+                if isinstance(result, Exception): logger.error(f"Failed to reset todo {page_id}: {result}")
+                elif result is True: reset_count += 1
+            logger.info(f"Successfully reset {reset_count} repeating todos (completion & reminded time).")
         except Exception as e:
-             logger.error(f"Unexpected error during daily todo reset: {e}", exc_info=True)
+             logger.error(f"Error during daily todo reset process: {e}", exc_info=True)
 
     # --- 필요시 추가 Notion 관련 메소드 구현 ---
     # 예: async def generate_observation_title(self, text: str) -> str: ...
