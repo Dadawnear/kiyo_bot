@@ -220,12 +220,20 @@ def parse_natural_date_string(natural_date_str: str, base_datetime: Optional[dat
 
     # 4. 시간대 정보 적용 (KST)
     if parsed_dt_naive:
-        if parsed_dt_naive.tzinfo is None:
-            # logger.debug(f"Parsed naive datetime: {parsed_dt_naive}, localizing to KST.")
-            return config.KST.localize(parsed_dt_naive)
-        else: # 이미 시간대 정보가 있다면 KST로 변환
-            # logger.debug(f"Parsed timezone-aware datetime: {parsed_dt_naive}, converting to KST.")
+        if parsed_dt_naive.tzinfo is None: # naive datetime인 경우
+            # config.KST가 ZoneInfo 객체인지 pytz 객체인지 확인하여 적절한 메소드 사용
+            if isinstance(config.KST, ZoneInfo):
+                # ZoneInfo 객체인 경우 .replace(tzinfo=...) 사용
+                logger.debug(f"Parsed naive datetime: {parsed_dt_naive}, applying ZoneInfo KST.")
+                return parsed_dt_naive.replace(tzinfo=config.KST)
+            else:
+                # pytz 객체인 경우 .localize(...) 사용 (config.py의 fallback 로직에 해당)
+                logger.debug(f"Parsed naive datetime: {parsed_dt_naive}, localizing with pytz KST.")
+                return config.KST.localize(parsed_dt_naive) # type: ignore
+        else: # 이미 aware datetime인 경우
+            logger.debug(f"Parsed timezone-aware datetime: {parsed_dt_naive}, converting to KST.")
             return parsed_dt_naive.astimezone(config.KST)
+    # --- 수정 끝 ---
 
     logger.warning(f"Could not parse natural date string into datetime: '{natural_date_str}'")
     return None
