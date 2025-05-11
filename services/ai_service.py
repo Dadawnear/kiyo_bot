@@ -612,6 +612,93 @@ class AIService:
         except Exception as e:
             logger.error(f"Unexpected error during task and date extraction: {e}", exc_info=True)
             return None
+            
+
+    async def extract_task_and_date(self, user_message: str) -> Optional[Dict[str, Any]]:
+        """
+        사용자 메시지에서 하나 또는 여러 개의 할 일 내용과 공통된 날짜 관련 표현을 추출하여
+        JSON 형식으로 반환합니다. OpenAI의 JSON 모드를 활용합니다.
+        """
+        if not self.openai_client:
+            logger.warning("OpenAI client not available for task and date extraction with JSON mode.")
+            return None
+
+        logger.debug(f"Attempting to extract multiple tasks and date from user message: '{user_message}'")
+
+        system_prompt = (
+            "You are an AI assistant specialized in parsing Korean text to extract task descriptions and due date information. "
+            "The user is '정서영'. Your goal is to identify one or more tasks and any single, overarching due date mentioned. "
+            "Respond ONLY with a JSON object containing two keys: \"task_descriptions\" and \"due_date_description\".\n"
+            "- \"task_descriptions\": A LIST of strings, where each string is a distinct task description. If multiple related activities are mentioned (e.g., separated by commas, '그리고', '또'), list them as separate items. If no specific task is identifiable, use null or an empty list.\n"
+            "- \"due_date_description\": A SINGLE string representing the due date or time that applies to ALL extracted tasks (e.g., \"내일\", \"다음주 월요일 저녁\"). If no due date is mentioned or a date applies to only some tasks but not all, use null.\n"
+            "Do not add any explanations or text outside the JSON object. If the input seems like casual conversation not containing a task, return null for \"task_descriptions\" or an empty list.\n\n"
+            "Examples:\n"
+            "User: \"내일 할 일은 과제 하기, 곰팡이 제거, 그리고 드레스룸 청소야.\"\n"
+            "Assistant: {\"task_descriptions\": [\"과제 하기\", \"곰팡이 제거\", \"드레스룸 청소\"], \"due_date_description\": \"내일\"}\n\n"
+            "User: \"오늘 저녁에는 장보고 요리하기.\"\n"
+            "Assistant: {\"task_descriptions\": [\"장보기\", \"요리하기\"], \"due_date_description\": \"오늘 저녁\"}\n\n"
+            "User: \"모레 프로젝트 최종 점검\"\n"
+            "Assistant: {\"task_descriptions\": [\"프로젝트 최종 점검\"], \"due_date_description\": \"모레\"}\n\n"
+            "User: \"책 반납하기\"\n" # 날짜 언급 없음
+            "Assistant: {\"task_descriptions\": [\"책 반납하기\"], \"due_date_description\": null}\n\n"
+            "User: \"주말에 뭐하지?\"\n" # 할 일 아님
+            "Assistant: {\"task_descriptions\": null, \"due_date_description\": null}"
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        # JSON 모드 사용을 위해 모델 확인 (이전 코드와 유사)
+        json_mode_compatible_model = config.DEFAULT_LLM_MODEL # 또는 특정 모델 지정
+        # ... (필요시 모델 호환성 체크 로직) ...
+
+        try:
+            response_str = await self._call_llm(
+                messages,
+                model=json_mode_compatible_model,
+                temperature=0.1, # 더 정확한 추출을 위해 온도 매우 낮춤
+                max_tokens=250,  # 여러 작업 설명과 날짜를 포함할 수 있도록 조정
+                response_format={"type": "json_object"}
+            )
+
+            if not response_str or response_str.startswith("크크…"):
+                logger.error(f"LLM call failed or returned error during task extraction: {response_str}")
+                return None
+
+            logger.debug(f"Raw JSON response for task extraction: {response_str}")
+            parsed_response = json.loads(response_str)
+
+            task_descriptions_list = parsed_response.get("task_descriptions")
+            due_date_desc = parsed_response.get("due_date_description")
+
+            # task_descriptions_list가 리스트 형태인지 확인하고, 아니면 빈 리스트로 처리
+            if not isinstance(task_descriptions_list, list):
+                if task_descriptions_list is not None: # null이 아닌 다른 타입이면 경고
+                    logger.warning(f"LLM returned non-list for task_descriptions: {task_descriptions_list}. Treating as empty.")
+                task_descriptions_list = []
+            
+            # 리스트 내 빈 문자열 제거
+            valid_task_descriptions = [desc.strip() for desc in task_descriptions_list if isinstance(desc, str) and desc.strip()]
+
+            if not valid_task_descriptions: # 유효한 작업 설명이 하나도 없으면
+                 logger.info(f"No valid task descriptions extracted from: '{user_message}'")
+                 # due_date_desc가 있더라도 작업 내용이 없으면 의미 없음
+                 return None
+            
+            if isinstance(due_date_desc, str) and not due_date_desc.strip(): # 빈 문자열이면 None으로
+                due_date_desc = None
+
+            logger.info(f"Extracted tasks: {valid_task_descriptions}, Due date desc: '{due_date_desc}' from message: '{user_message}'")
+            return {"task_descriptions": valid_task_descriptions, "due_date_description": due_date_desc}
+
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse LLM response as JSON for task extraction. Response: {response_str}", exc_info=True)
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error during task and date extraction: {e}", exc_info=True)
+            return None
 
 
 # AIService 인스턴스 생성 (싱글턴처럼 사용 가능)
