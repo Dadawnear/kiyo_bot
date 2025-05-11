@@ -2,8 +2,9 @@ import aiohttp
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Dict, Any, Optional, Tuple
+import random
 
 import config # 설정 임포트
 # utils.helpers는 아래 코드 내에서 직접 사용하지 않으므로 주석 처리
@@ -498,10 +499,18 @@ class NotionService:
         # --------------------------------------------------
 
         now = datetime.now(config.KST)
-        korean_weekday_map = ["월", "화", "수", "목", "금", "토", "일"]
-        today_weekday = korean_weekday_map[now.weekday()]
+        # korean_weekday_map = ["월", "화", "수", "목", "금", "토", "일"] # <<< 이 줄 삭제
+        # config.py에 정의된 korean_weekday_map 사용하도록 변경
+        if not hasattr(config, 'korean_weekday_map') or not isinstance(config.korean_weekday_map, list) or len(config.korean_weekday_map) != 7:
+            logger.error("korean_weekday_map is not correctly defined in config.py! Cannot determine today_weekday for todo filter.")
+            # 임시 fallback 또는 오류 반환
+            temp_k_map = ["월", "화", "수", "목", "금", "토", "일"]
+            today_weekday = temp_k_map[now.weekday()]
+            logger.warning("Using temporary default korean_weekday_map.")
+        else:
+            today_weekday = config.korean_weekday_map[now.weekday()]
 
-        # --- 필터 조건 생성 (구조 변경) ---
+        # --- 필터 조건 생성  ---
         try:
             # 조건 1: 완료되지 않았고, "반복"이 "매일"인 경우
             filter_for_daily_tasks = {
@@ -631,8 +640,17 @@ class NotionService:
         # last_reminded_prop_name = "마지막 리마인드" # reset_task에서 사용
 
         now = datetime.now(config.KST)
-        today_weekday = config.korean_weekday_map[now.weekday()] # config에서 가져오도록 수정 가정
-
+        
+        # config.py에 정의된 korean_weekday_map 사용하도록 변경
+        if not hasattr(config, 'korean_weekday_map') or not isinstance(config.korean_weekday_map, list) or len(config.korean_weekday_map) != 7:
+            logger.error("korean_weekday_map is not correctly defined in config.py! Cannot determine today_weekday for todo reset.")
+            # 임시 fallback 또는 오류 반환
+            temp_k_map = ["월", "화", "수", "목", "금", "토", "일"]
+            today_weekday = temp_k_map[now.weekday()]
+            logger.warning("Using temporary default korean_weekday_map for reset.")
+        else:
+            today_weekday = config.korean_weekday_map[now.weekday()]
+            
         query_payload = { # 완료된 반복 할 일들 조회
             "filter": {
                 "and": [
@@ -693,6 +711,62 @@ class NotionService:
             logger.info(f"Successfully reset {reset_count} repeating todos (completion & reminded time).")
         except Exception as e:
              logger.error(f"Error during daily todo reset process: {e}", exc_info=True)
+
+async def add_schedule_entry(self, task_name: str, due_date: datetime | date, completed: bool = False) -> Optional[str]:
+        """
+        새로운 Notion 캘린더(스케줄) 데이터베이스에 단발성 할 일(스케줄)을 추가합니다.
+
+        Args:
+            task_name: 할 일 내용 (문자열).
+            due_date: 마감 날짜 (datetime 또는 date 객체). 시간 정보는 무시될 수 있음 (날짜만 사용).
+            completed: 완료 여부 (기본값: False).
+
+        Returns:
+            성공 시 생성된 Notion 페이지 ID (문자열), 실패 시 None.
+        """
+        if not config.NOTION_SCHEDULE_DB_ID:
+            logger.error("NOTION_SCHEDULE_ID (for Schedule/Calendar DB) is not set in config. Cannot add schedule entry.")
+            return None
+
+        # --- 새 스케줄 DB의 속성 이름 (실제 Notion DB와 일치해야 함!) ---
+        schedule_title_prop_name = "할 일"  # 예시: 타이틀 속성 이름
+        schedule_date_prop_name = "날짜"    # 예시: 날짜 속성 이름
+        schedule_completed_prop_name = "완료" # 예시: 체크박스 속성 이름
+        # ----------------------------------------------------------------
+
+        logger.info(f"Attempting to add schedule entry: '{task_name}' for date {due_date.strftime('%Y-%m-%d')}")
+
+        properties = {
+            schedule_title_prop_name: {"title": self._format_rich_text(task_name)},
+            # _format_date는 datetime 또는 date 객체를 받아 "YYYY-MM-DD" 형식으로 만듦
+            schedule_date_prop_name: {"date": self._format_date(due_date)},
+        }
+        # 완료 속성이 DB에 있고, 그 이름이 schedule_completed_prop_name일 경우
+        if schedule_completed_prop_name: # 이름이 설정되어 있을 때만 추가
+             properties[schedule_completed_prop_name] = {"checkbox": completed}
+
+
+        payload = {
+            "parent": {"database_id": config.NOTION_SCHEDULE_DB_ID},
+            "properties": properties
+            # 단발성 일정은 보통 페이지 본문(children)이 필요 없을 수 있음
+            # 필요하다면 children 추가
+        }
+
+        try:
+            response = await self._request('POST', 'pages', json=payload)
+            page_id = response.get("id")
+            if page_id:
+                logger.info(f"Successfully added schedule entry to Notion (Page ID: {page_id}): '{task_name}' for {due_date.strftime('%Y-%m-%d')}")
+            else:
+                logger.error(f"Failed to add schedule entry to Notion (no page_id in response): '{task_name}'")
+            return page_id
+        except NotionAPIError as e:
+            logger.error(f"Failed to add schedule entry '{task_name}' to Notion: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error adding schedule entry '{task_name}': {e}", exc_info=True)
+            return None
 
     # --- 필요시 추가 Notion 관련 메소드 구현 ---
     # 예: async def generate_observation_title(self, text: str) -> str: ...
