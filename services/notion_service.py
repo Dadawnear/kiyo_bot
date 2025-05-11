@@ -657,7 +657,14 @@ class NotionService:
                 response = await self._request('POST', f'databases/{config.NOTION_TODO_DB_ID}/query', json=current_payload)
                 results = response.get("results", [])
                 pages_to_reset.extend(results)
-                if response.get("has_more"): start_cursor = response.get("next_cursor"); else: break
+    
+                if response.get("has_more"):
+                    start_cursor = response.get("next_cursor")
+                    # 추가: start_cursor가 실제로 값이 있는지 확인하는 것이 더 안전합니다.
+                    if not start_cursor: # 만약 next_cursor가 비어있거나 None이면 더 이상 진행할 수 없음
+                        break
+                else: # "has_more"가 False이면 루프 종료
+                    break
 
             if not pages_to_reset:
                 logger.info("No completed repeating todos found to reset.")
