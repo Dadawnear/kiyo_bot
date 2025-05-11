@@ -106,10 +106,10 @@ DEFAULT_LLM_MODEL = "gpt-4o" # OpenAI 사용 시 기본 모델
 
 # --- 기능별 설정 ---
 # 선톡 기능 설정
-INITIATE_CHECK_INTERVAL_MINUTES = 30
+INITIATE_CHECK_INTERVAL_MINUTES = 480
 INITIATE_ALLOWED_START_HOUR = 11 # 선톡 시작 시간 (KST)
 INITIATE_ALLOWED_END_HOUR = 1   # 선톡 종료 시간 (KST, 다음날 새벽)
-INITIATE_MIN_GAP_HOURS = 12     # 최소 공백 시간 (이 시간 미만이면 선톡 안 함)
+INITIATE_MIN_GAP_HOURS = 24     # 최소 공백 시간 (이 시간 미만이면 선톡 안 함)
 
 # 대면 채널 ID (특수 로직 적용)
 FACE_TO_FACE_CHANNEL_ID = os.getenv("FACE_TO_FACE_CHANNEL_ID")
