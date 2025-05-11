@@ -6,6 +6,18 @@ import discord # is_target_user에서 discord.User 타입 힌트 위해
 from dateutil.parser import parse as dateutil_parse # dateutil.parser 임포트
 from dateutil.relativedelta import relativedelta, SU, MO, TU, WE, TH, FR, SA # relativedelta 및 요일 상수 임포트
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    # Python 3.9 미만 또는 zoneinfo를 사용할 수 없는 환경에 대한 fallback (선택적)
+    # 이 경우 config.KST는 pytz 객체일 가능성이 높으므로,
+    # isinstance(config.KST, ZoneInfo) 체크는 항상 False가 됨.
+    # config.py에서 KST 설정 시 이미 ZoneInfo 또는 pytz를 사용하므로,
+    # 여기서의 ZoneInfo는 isinstance 체크용으로만 필요.
+    # 만약 Python 3.9 미만 환경이 확실하다면 이 try-except는 불필요할 수 있음.
+    ZoneInfo = None # ZoneInfo를 사용할 수 없음을 명시 (isinstance 체크 시 오류 방지용)
+    logger.warning("zoneinfo module not found. Timezone handling might be limited if pytz is also unavailable.")
+
 import config # 설정 임포트
 
 logger = logging.getLogger(__name__)
@@ -221,19 +233,19 @@ def parse_natural_date_string(natural_date_str: str, base_datetime: Optional[dat
     # 4. 시간대 정보 적용 (KST)
     if parsed_dt_naive:
         if parsed_dt_naive.tzinfo is None: # naive datetime인 경우
-            # config.KST가 ZoneInfo 객체인지 pytz 객체인지 확인하여 적절한 메소드 사용
-            if isinstance(config.KST, ZoneInfo):
-                # ZoneInfo 객체인 경우 .replace(tzinfo=...) 사용
+            # config.KST가 ZoneInfo 객체인지 확인
+            if ZoneInfo and isinstance(config.KST, ZoneInfo): # ZoneInfo가 성공적으로 import되었는지 확인
                 logger.debug(f"Parsed naive datetime: {parsed_dt_naive}, applying ZoneInfo KST.")
                 return parsed_dt_naive.replace(tzinfo=config.KST)
-            else:
-                # pytz 객체인 경우 .localize(...) 사용 (config.py의 fallback 로직에 해당)
+            elif hasattr(config.KST, 'localize'): # pytz 객체인지 확인 (localize 메소드 유무로)
                 logger.debug(f"Parsed naive datetime: {parsed_dt_naive}, localizing with pytz KST.")
                 return config.KST.localize(parsed_dt_naive) # type: ignore
+            else: # 알 수 없는 시간대 객체 타입
+                logger.error(f"Unknown timezone object type for KST: {type(config.KST)}. Cannot make datetime aware.")
+                return parsed_dt_naive # 어쩔 수 없이 naive datetime 반환 또는 None 반환
         else: # 이미 aware datetime인 경우
             logger.debug(f"Parsed timezone-aware datetime: {parsed_dt_naive}, converting to KST.")
             return parsed_dt_naive.astimezone(config.KST)
-    # --- 수정 끝 ---
 
     logger.warning(f"Could not parse natural date string into datetime: '{natural_date_str}'")
     return None
