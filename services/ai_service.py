@@ -471,23 +471,24 @@ class AIService:
         reminder_dialogue = await self._call_llm(messages, temperature=0.8, max_tokens=80)
         return reminder_dialogue
 
-    async def generate_timeblock_reminder_gpt(self, timeblock: str, todo_titles: List[str]) -> str:
-         """시간대별 할 일 목록 리마인더 메시지 생성"""
+    async def generate_timeblock_reminder_gpt(self, current_time_display_name: str, todo_titles: List[str]) -> str:
+         """시간대별 누적 할 일 목록 리마인더 메시지 생성"""
          task_preview = ", ".join(todo_titles[:3]) + (f" 외 {len(todo_titles)-3}개" if len(todo_titles) > 3 else "")
-         user_context_text = f"{timeblock} 시간대에 할 일들: {task_preview}"
+         # user_context_text = f"{current_time_display_name} 시간대에 할 일들: {task_preview}"
+         user_context_text = f"오늘 아직 마무리하지 못한 일들 ({current_time_display_name} 기준): {task_preview}"
+
 
          base_context = await self._build_kiyo_context(user_text=user_context_text)
          system_prompt = (
              f"{self._get_base_system_prompt()}\n\n"
              f"--- 추가 컨텍스트 및 지시사항 ---\n{base_context}\n\n"
-             f"--- 시간대 리마인더 특별 지시 ---\n"
-             f"지금은 '{timeblock}' 시간대이다. 사용자(정서영)가 이 시간대에 하기로 했던 일들({task_preview})이 있다는 것을 **간접적으로만 암시**하며 한 문장의 메시지를 작성하라. "
-             f"**절대 할 일을 직접 나열하거나 상기시키려 하지 마라.** 마치 **현재 시간이나 분위기에 대한 감상**을 말하는 척하면서, 사용자가 **스스로 할 일을 떠올리도록 유도**하는 방식이 좋다. "
-             f"(예: '벌써 {timeblock}이네. 오늘은 시간이 참 빠르게 흐르는 것 같지 않아?', '크크… {timeblock}에는 보통 조용해서 집중하기 좋지.', '어쩐지 공기가 {timeblock}의 색을 띠고 있는 것 같아.')" # 예시 추가
-             f"신구지 특유의 조용하고 관찰자적인 톤을 유지하며, 반말로 작성하라."
+             f"--- 누적 할 일 리마인더 특별 지시 ---\n"
+             f"현재 시각은 '{current_time_display_name}' 근처이다. 사용자(정서영)가 오늘 해야 할 일 중 아직 완료하지 않은 것으로 보이는 항목들은 다음과 같다: {task_preview}. "
+             f"이 사실을 부드럽게 상기시키는 한두 문장의 메시지를 작성하라. **특정 시간대를 명시하기보다 '오늘 아직 남은 일들' 또는 '지금까지 확인된 미완료 작업들' 같은 뉘앙스**로, 마치 네가 방금 그 목록을 본 것처럼 자연스럽게 언급하라. "
+             f"할 일을 직접 나열하기보다, 그것들이 있다는 사실 자체를 은은하게 암시하라. 신구지 특유의 조용하고 관찰자적인 톤을 유지하며, 반말로 작성하라."
          )
          messages = [{"role": "system", "content": system_prompt}]
-         timeblock_reminder = await self._call_llm(messages, temperature=0.8, max_tokens=80)
+         timeblock_reminder = await self._call_llm(messages, temperature=0.8, max_tokens=100) # 토큰 늘림
          return timeblock_reminder
 
     async def generate_initiate_message(self, gap_hours: float,
