@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import logging
 from typing import Optional, TYPE_CHECKING
-from datetime import datetime # 오늘 날짜 기본값으로 사용 위해
+from datetime import datetime, time, timedelta # 오늘 날짜 기본값으로 사용 위해
 
 import config # 설정 임포트
 from utils.helpers import is_target_user, parse_natural_date_string # 헬퍼 함수 임포트
