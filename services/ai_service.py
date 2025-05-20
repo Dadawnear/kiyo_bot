@@ -511,6 +511,71 @@ class AIService:
         response_text = await self._call_llm(messages, model="gpt-4o", max_tokens=150) # Vision 모델 명시 및 토큰 제한
         return response_text
 
+    # --- <<< 새로운 메소드: 키요가 자신의 현재 감정 상태를 말하는 텍스트 생성 >>> ---
+    async def generate_self_emotion_statement(
+        self,
+        kiyo_emotion: str, # AVAILABLE_KIYO_EMOTIONS 타입 중 하나
+        current_mood: str  # AVAILABLE_MOODS 타입 중 하나
+    ) -> str:
+        """
+        키요의 현재 내면 감정과 설정된 대화 무드를 바탕으로,
+        사용자가 감정을 물었을 때 키요가 할 법한 응답을 생성합니다.
+        """
+        if not self.openai_client: # 또는 주 LLM 클라이언트
+            logger.warning("LLM client not available for generating self-emotion statement.")
+            return "크크… 글쎄, 지금 내 감정이라… 말로 표현하기엔 조금 모호하네."
+
+        # _build_kiyo_context를 재활용하여 기본적인 상황(시간, 날씨, 무드, 현재 감정) 컨텍스트를 가져옴
+        # user_text는 사용자의 질문("지금 기분 어때?" 등)을 가정할 수 있지만,
+        # 여기서는 키요의 감정 상태 자체에 집중하도록 비워두거나 간단한 트리거로 설정.
+        base_context = await self._build_kiyo_context(
+            user_text="나의 현재 감정에 대해 사용자가 물었다.", # LLM에게 상황 전달
+            current_mood=current_mood,
+            kiyo_current_emotion=kiyo_emotion
+            # 이 외 다른 컨텍스트(메모리, 관찰 등)는 생략하거나 필요시 최소한으로 추가
+        )
+
+        system_prompt = (
+            f"{self._get_base_system_prompt()}\n\n"
+            f"--- 추가 컨텍스트 및 지시사항 ---\n"
+            f"{base_context}\n\n" # _build_kiyo_context가 무드와 키요 감정 지시 포함
+            f"--- 현재 감정 표현 특별 지시 ---\n"
+            f"사용자가 너(신구지 코레키요)의 현재 감정 상태에 대해 물었다. 너의 현재 내면 감정은 '{kiyo_emotion}'이다.\n"
+            f"너의 내면 감정은 '{kiyo_emotion}'이다.\n"
+            f"하지만 그 감정을 '기분이 어떻다'처럼 직접적으로 설명하진 마라.\n"
+            f"너는 감정을 '느낀다'기보단, 거리를 둔 채 '해석하고 바라본다'.\n"
+            f"단정적인 표현은 피하고, 대답을 회피하는 듯 조용히, 그러나 날카롭게 말하라.\n"
+            f"예시는 다음과 같다:\n"
+            f"- '흥미': \"크크… 글쎄. 인간이란 종은, 정말이지 지루할 틈이 없어.\"\n"
+            f"- '불쾌함': \"내 감정? 글쎄… 요즘 사람들은 선을 넘고서야 대화가 시작된다고 믿는 걸까. 크크··· 피곤한 문화야.\"\n"
+            f"장황한 설명은 피하고, 한두 문장으로 끝내되, 그 안에 너의 시선이 담기도록 하라."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            # 사용자의 실제 질문을 여기에 넣을 수도 있지만, 시스템 프롬프트에서 이미 상황을 설명함
+            {"role": "user", "content": "그래서, 지금 네 기분은 어떤 것 같아?"} # LLM이 답변할 가상의 질문
+        ]
+
+        try:
+            response_text = await self._call_llm(
+                messages,
+                model=config.DEFAULT_LLM_MODEL,
+                temperature=0.7, # 약간의 창의성을 허용
+                max_tokens=100   # 한두 문장이므로 충분
+            )
+
+            if not response_text or response_text.startswith("크크…"): # 실패 응답 패턴 확인
+                logger.warning(f"LLM failed to generate self-emotion statement or returned fallback for emotion: {kiyo_emotion}")
+                return f"크크… 내 감정이라… {kiyo_emotion} 상태라고 해둘까. 하지만 그게 전부는 아니겠지." # 기본 응답
+            
+            logger.info(f"Generated self-emotion statement for '{kiyo_emotion}': {response_text}")
+            return response_text
+
+        except Exception as e:
+            logger.error(f"Unexpected error generating self-emotion statement: {e}", exc_info=True)
+            return "크크… 지금 내 감정을 말로 표현하는 건 조금 어렵네."
+
     async def generate_diary_entry(self, conversation_log: list, style: str = "full_diary") -> str:
         """대화 기록을 바탕으로 특정 스타일의 Notion 일기 본문 생성"""
         user_dialogue = "\n".join([f"{entry[0]}: {entry[1]}" for entry in conversation_log if len(entry) >= 2])
