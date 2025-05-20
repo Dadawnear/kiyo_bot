@@ -119,6 +119,9 @@ class GeneralCog(commands.Cog):
         # 4. 활동 시간 갱신
         update_last_active()
         # logger.debug(f"Activity time updated by {user_name}")
+        
+        # 무드 명령어 가져오기
+        current_mood = self.bot.get_conversation_mood()
 
         # 5. 사용자 메시지 대화 로그에 추가
         # add_conversation_log 메소드는 KiyoBot 클래스에 구현됨
