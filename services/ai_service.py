@@ -331,6 +331,7 @@ class AIService:
         )
 
     async def generate_response(self, conversation_log: list,
+                                current_mood: Optional[str] = "기본",
                                 recent_memories: Optional[List[str]] = None,
                                 recent_observations: Optional[str] = None,
                                 recent_diary_summary: Optional[str] = None) -> str:
