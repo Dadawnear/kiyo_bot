@@ -124,76 +124,51 @@ class GeneralCog(commands.Cog):
         # 무드 명령어 가져오기
         current_mood = self.bot.get_conversation_mood()
 
-        # 사용자 메시지 기반으로 키요의 감정 결정
+        # 5. 사용자 메시지 기반으로 키요의 감정 결정
         user_emotion_for_kiyo_reaction = await self.bot.ai_service.detect_emotion(message.content)
-        current_kiyo_emotion = self.bot.get_kiyo_emotion() # 현재 키요 감정
-        current_set_mood = self.bot.get_conversation_mood() # 현재 설정된 대화 무드
+        current_conversation_mood = self.bot.get_conversation_mood() # 현재 설정된 대화 무드
+        current_kiyo_emotion_before_update = self.bot.get_kiyo_emotion() # 업데이트 전 현재 키요 감정
+        # AI 서비스를 호출하여 키요의 다음 감정 결정
+        new_kiyo_emotion = await self.bot.ai_service.determine_kiyo_next_emotion(
+            conversation_log=self.bot.get_conversation_log(channel_id)[-3:], # 최근 3개 대화 로그 전달
+            last_user_message=message.content,
+            detected_user_emotion=user_emotion_for_kiyo_reaction,
+            current_conversation_mood=current_conversation_mood,
+            current_kiyo_emotion=current_kiyo_emotion_before_update
+        )
+         self.bot.set_kiyo_emotion(new_kiyo_emotion) # 키요 감정 업데이트
+        # 로그 메시지에서 이전 감정과 새 감정을 함께 보여주면 변화를 추적하기 좋음
+        logger.info(f"[GeneralCog] Kiyo's emotion changed from '{current_kiyo_emotion_before_update}' to '{new_kiyo_emotion}' based on AI determination (User emotion: '{user_emotion_for_kiyo_reaction}', Mood: '{current_conversation_mood}').")
 
-        new_kiyo_emotion = current_kiyo_emotion # 기본적으로 현재 감정 유지
-
-        # (여기에 사용자 감정, 현재 무드, 현재 키요 감정 등을 조합하여
-        #  키요의 다음 감정을 결정하는 더 정교한 로직을 추가할 수 있습니다.
-        #  지금은 간단한 예시만 넣겠습니다.)
-        if user_emotion_for_kiyo_reaction == "애정":
-            if current_set_mood != "장난": # 장난 무드가 아닐 때 사용자가 애정을 표현하면
-                new_kiyo_emotion = "흥미"  # 키요는 '흥미'를 느낀다
-            else: # 장난 무드일 때 사용자가 애정을 표현하면
-                new_kiyo_emotion = "냉소"  # 키요는 '냉소'적으로 반응할 수 있다 (예시)
-        elif user_emotion_for_kiyo_reaction == "불만_분노":
-            if current_set_mood == "장난":
-                new_kiyo_emotion = "흥미" # 장난 무드에서는 오히려 흥미를 느낄 수 있음
-            elif current_set_mood == "진지":
-                new_kiyo_emotion = "고요함" # 진지한 상황에서는 감정을 더 누르고 관찰
-            else: # 기본 무드
-                new_kiyo_emotion = "불쾌함"
-        elif user_emotion_for_kiyo_reaction == "슬픔" and current_set_mood != "장난":
-            new_kiyo_emotion = "미묘한 슬픔" # 사용자의 슬픔에 미묘하게 동조 (장난 아닐때)
-        elif "민속학" in message.content or "인간" in message.content or "아름다움" in message.content : # 특정 키워드에 반응
-            if current_set_mood == "진지":
-                new_kiyo_emotion = "탐구심"
-            else:
-                new_kiyo_emotion = "흥미"
-
-        self.bot.set_kiyo_emotion(new_kiyo_emotion) # 키요 감정 업데이트
-        logger.info(f"[GeneralCog] Kiyo's emotion updated to '{new_kiyo_emotion}' based on user message and mood '{current_set_mood}'.")
-        # --- 키요 감정 결정 로직 끝 ---
-
-        # 5. 사용자 메시지 대화 로그에 추가
+        # 6. 사용자 메시지 대화 로그에 추가
         # add_conversation_log 메소드는 KiyoBot 클래스에 구현됨
         self.bot.add_conversation_log(channel_id, user_name, message.content)
         logger.info(f"Logged message from {user_name} in channel {channel_id}.")
 
-        # 6. AI 응답 생성 및 전송
-        # (주의: NotionFeaturesCog의 on_message 리스너(기억하기)가 이 메시지를
-        # 처리했다면 여기서 응답 생성을 건너뛰는 로직이 필요할 수 있음.
-        # 여기서는 일단 무조건 응답 생성 시도)
+         # 7. AI 응답 생성 및 전송
         try:
-            # 응답 생성에 필요한 컨텍스트 가져오기
-            conversation_log = self.bot.get_conversation_log(channel_id)
-            # Notion 서비스 통해 최근 정보 가져오기 (오류 발생해도 진행 가능하도록)
+            conversation_log_for_response = self.bot.get_conversation_log(channel_id) # 전체 로그 전달
             recent_memories = await self.bot.notion_service.fetch_recent_memories(limit=3)
             recent_observations = await self.bot.notion_service.fetch_recent_observations(limit=1)
             recent_diary_summary = await self.bot.notion_service.fetch_recent_diary_summary(limit=1)
-            # 현재 설정된 대화 무드와 키요의 감정 상태를 가져와 AI 서비스에 전달
-            final_mood_for_response = self.bot.get_conversation_mood()
-            final_kiyo_emotion_for_response = self.bot.get_kiyo_emotion()
 
-            # AI 서비스 호출하여 응답 생성
-            logger.debug(f"Requesting AI response for channel {channel_id}...")
+            # 현재 설정된 대화 무드와 AI가 방금 결정한 키요의 감정 상태를 가져와 전달
+            final_mood_for_response = self.bot.get_conversation_mood() # 변경 없을 수 있으나, 명시적 호출
+            final_kiyo_emotion_for_response = self.bot.get_kiyo_emotion() # AI가 결정한 새 감정
+
+            logger.debug(f"Requesting AI response for channel {channel_id} with mood: '{final_mood_for_response}', kiyo_emotion: '{final_kiyo_emotion_for_response}'")
             kiyo_response = await self.bot.ai_service.generate_response(
-                conversation_log=conversation_log,
-                current_mood=final_mood_for_response,                 # 설정된 대화 무드 전달
-                kiyo_current_emotion=final_kiyo_emotion_for_response, # 키요의 현재 감정 전달
+                conversation_log=conversation_log_for_response,
+                current_mood=final_mood_for_response,
+                kiyo_current_emotion=final_kiयो_emotion_for_response,
                 recent_memories=recent_memories if isinstance(recent_memories, list) else None,
                 recent_observations=recent_observations if isinstance(recent_observations, str) else None,
                 recent_diary_summary=recent_diary_summary if isinstance(recent_diary_summary, str) else None
             )
 
             if kiyo_response:
-                # 응답 메시지 전송
                 await message.channel.send(kiyo_response)
-                # 봇 응답도 로그에 추가
-                self.bot.add_conversation_log(channel_id, "キヨ", kiyo_response)
+                self.bot.add_conversation_log(channel_id, "キヨ", kiyo_response) # 봇 응답 로그
                 logger.info(f"Sent AI response to channel {channel_id}.")
             else:
                 logger.warning(f"AI service returned empty response for channel {channel_id}.")
@@ -201,10 +176,9 @@ class GeneralCog(commands.Cog):
         except Exception as e:
             logger.error(f"Error generating or sending AI response for channel {channel_id}: {e}", exc_info=True)
             try:
-                # 사용자에게 오류 알림 (선택적)
                 await message.channel.send("크크… 지금은 답하기 어렵네. 무슨 문제가 있는 것 같아.")
             except discord.HTTPException:
-                pass # 메시지 전송조차 실패
+                pass
 
 
 # Cog를 봇에 추가하기 위한 필수 설정 함수
