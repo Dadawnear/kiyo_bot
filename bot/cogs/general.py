@@ -136,7 +136,7 @@ class GeneralCog(commands.Cog):
             current_conversation_mood=current_conversation_mood,
             current_kiyo_emotion=current_kiyo_emotion_before_update
         )
-         self.bot.set_kiyo_emotion(new_kiyo_emotion) # 키요 감정 업데이트
+        self.bot.set_kiyo_emotion(new_kiyo_emotion) # 키요 감정 업데이트
         # 로그 메시지에서 이전 감정과 새 감정을 함께 보여주면 변화를 추적하기 좋음
         logger.info(f"[GeneralCog] Kiyo's emotion changed from '{current_kiyo_emotion_before_update}' to '{new_kiyo_emotion}' based on AI determination (User emotion: '{user_emotion_for_kiyo_reaction}', Mood: '{current_conversation_mood}').")
 
