@@ -6,7 +6,7 @@ from openai import AsyncOpenAI, OpenAIError # OpenAI 오류 처리 추가
 from datetime import datetime
 import random
 import difflib
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, Literal
 import json
 
 import config # 설정 임포트
@@ -166,6 +166,86 @@ class AIService:
             logger.debug(f"Found related past message using difflib: '{similar[0]}'")
             return similar[0]
         return None
+
+    async def determine_kiyo_next_emotion(
+        self,
+        conversation_log: List[Tuple[str, str, int]], # (speaker, text, channel_id)
+        last_user_message: str,
+        detected_user_emotion: str,
+        current_conversation_mood: str, # AVAILABLE_MOODS 타입
+        current_kiyo_emotion: str      # AVAILABLE_KIYO_EMOTIONS 타입
+    ) -> str: # 반환 타입은 AVAILABLE_KIYO_EMOTIONS 중 하나여야 함
+        """
+        대화 맥락, 사용자 감정, 현재 무드, 현재 키요 감정을 바탕으로
+        키요의 다음 내면 감정을 결정합니다.
+        """
+        if not self.openai_client: # 또는 주 LLM 클라이언트
+            logger.warning("LLM client not available for determining Kiyo's next emotion. Returning current emotion.")
+            return current_kiyo_emotion
+
+        # 사용 가능한 키요의 감정 목록 (bot/client.py의 AVAILABLE_KIYO_EMOTIONS와 일치해야 함)
+        possible_emotions = ["고요함", "흥미", "냉소", "불쾌함", "탐구심", "미묘한 슬픔"]
+        emotions_str = ", ".join(f"'{e}'" for e in possible_emotions)
+
+        # 대화 로그에서 최근 몇 개만 사용
+        recent_dialogue = "\n".join([f"{entry[0]}: {entry[1]}" for entry in conversation_log[-3:] if len(entry) >= 2])
+
+        system_prompt = (
+            "너는 심리 분석가이자 캐릭터 컨설턴트다. '신구지 코레키요'라는 특정 캐릭터의 다음 감정 상태를 결정해야 한다.\n"
+            "주어진 대화 맥락, 사용자의 감정, 설정된 대화 무드, 그리고 신구지의 현재 감정을 고려하여, 신구지가 다음 순간 어떤 내면의 감정을 느낄지 가장 적절한 것을 선택하라.\n"
+            f"선택지는 다음과 같다: {emotions_str}.\n"
+            "응답은 반드시 다음 JSON 형식이어야 하며, 다른 설명은 절대 추가하지 마라:\n"
+            "{\"next_kiyo_emotion\": \"선택된 감정\"}\n"
+            "예를 들어, 상황에 따라 '흥미'를 느낄 것 같다면 {\"next_kiyo_emotion\": \"흥미\"} 라고만 답하라."
+        )
+
+        user_prompt_content = (
+            f"## 현재 상황 분석:\n"
+            f"1. 최근 대화:\n{recent_dialogue}\n\n"
+            f"2. 방금 사용자가 한 말: \"{last_user_message}\"\n"
+            f"3. 위 사용자 발언에서 추론된 사용자 감정: {detected_user_emotion}\n\n"
+            f"4. 현재 설정된 대화 무드: {current_conversation_mood}\n"
+            f"5. 신구지의 현재 내면 감정: {current_kiyo_emotion}\n\n"
+            f"## 지시:\n"
+            f"위 상황을 종합적으로 고려했을 때, 신구지 코레키요의 다음 내면 감정으로 가장 적절한 것을 {emotions_str} 중에서 하나만 골라 지정된 JSON 형식으로 응답하라."
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt_content}
+        ]
+
+        try:
+            # JSON 모드 사용 가능한 모델로 호출
+            response_str = await self._call_llm(
+                messages,
+                model=config.DEFAULT_LLM_MODEL, # 또는 JSON 모드 잘 지원하는 모델 명시
+                temperature=0.3, # 감정 결정은 일관성이 중요할 수 있음
+                max_tokens=50,   # JSON 응답은 짧음
+                response_format={"type": "json_object"}
+            )
+
+            if not response_str or response_str.startswith("크크…"):
+                logger.error(f"LLM call failed for Kiyo's next emotion determination: {response_str}")
+                return current_kiyo_emotion # 실패 시 현재 감정 유지
+
+            logger.debug(f"Raw JSON response for Kiyo's next emotion: {response_str}")
+            parsed_response = json.loads(response_str)
+            next_emotion = parsed_response.get("next_kiyo_emotion")
+
+            if next_emotion in possible_emotions:
+                logger.info(f"AI determined Kiyo's next emotion to be: '{next_emotion}'")
+                return next_emotion
+            else:
+                logger.warning(f"LLM returned an invalid emotion '{next_emotion}'. Falling back to current emotion '{current_kiyo_emotion}'. Response: {response_str}")
+                return current_kiyo_emotion
+
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse LLM response as JSON for Kiyo's next emotion. Response: {response_str}", exc_info=True)
+            return current_kiyo_emotion
+        except Exception as e:
+            logger.error(f"Unexpected error determining Kiyo's next emotion: {e}", exc_info=True)
+            return current_kiyo_emotion # 예외 발생 시 현재 감정 유지
 
     async def _build_kiyo_context(self, user_text: str = "", conversation_log: Optional[list] = None,
                                 current_mood: Optional[str] = "기본",
