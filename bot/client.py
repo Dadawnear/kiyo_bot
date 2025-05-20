@@ -2,11 +2,11 @@ import discord
 from discord.ext import commands, tasks
 import logging
 import os
-import traceback # 상세한 오류 로깅을 위해 추가
+import traceback 
 from typing import Dict, List, Tuple, Optional, Literal
+import asyncio
 import random
-
-import config # 설정 임포트
+import config 
 
 # --- Service Imports ---
 from services.ai_service import AIService
@@ -148,40 +148,54 @@ class KiyoBot(commands.Bot):
     async def emotion_decay_manager(self):
         """일정 시간 대화가 없으면 키요의 감정을 랜덤하게 변경하는 관리자 태스크."""
         await self.wait_until_ready() # 봇이 준비될 때까지 대기
-        logger.info("Kiyo's emotion decay manager started.")
+        logger.info("Kiyo's emotion decay manager started. Checking interval: %s seconds, Inactivity threshold: %s seconds.",
+                    config.KIYO_EMOTION_DECAY_CHECK_INTERVAL_SECONDS,
+                    config.KIYO_EMOTION_CHANGE_INACTIVITY_THRESHOLD_SECONDS)
         while not self.is_closed():
             try:
-                await asyncio.sleep(60 * 30) # 30분마다 체크 (너무 잦으면 성능에 영향 줄 수 있으므로 조절)
+                # config.py에 정의된 체크 주기로 변경
+                await asyncio.sleep(config.KIYO_EMOTION_DECAY_CHECK_INTERVAL_SECONDS)
 
                 now = datetime.now(config.KST)
                 time_since_last_interaction = now - self.last_interaction_time
                 
-                # 3시간 이상 상호작용이 없었는지 확인
-                if time_since_last_interaction.total_seconds() >= (3 * 60 * 60):
+                # config.py에 정의된 비활성 임계값으로 변경
+                if time_since_last_interaction.total_seconds() >= config.KIYO_EMOTION_CHANGE_INACTIVITY_THRESHOLD_SECONDS:
                     current_emotion = self.get_kiyo_emotion()
-                    available_emotions_list = list(get_args(AVAILABLE_KIYO_EMOTIONS)) # Literal에서 실제 값 리스트 가져오기
+                    available_emotions_list = list(get_args(AVAILABLE_KIYO_EMOTIONS))
                     
-                    # 현재 감정을 제외한 다른 감정들 중에서 랜덤 선택
                     new_emotion_pool = [e for e in available_emotions_list if e != current_emotion]
                     
                     if new_emotion_pool:
                         new_random_emotion = random.choice(new_emotion_pool)
                         self.set_kiyo_emotion(new_random_emotion) # 새로운 감정으로 설정
-                        logger.info(f"Kiyo's emotion auto-changed to '{new_random_emotion}' due to 3+ hours of inactivity.")
+                        # logger.info(f"Kiyo's emotion auto-changed to '{new_random_emotion}' due to inactivity threshold reached.") # 로그 메시지 약간 수정
                         
                         # 감정 변경 후에는 타이머 리셋을 위해 상호작용 시간 갱신
                         self.update_last_interaction_time() 
                         
-                        # (선택적) 감정 변경에 대한 내적 독백 생성 및 로그/DM 전송
-                        # target_user_dm = await self._get_target_user_dm() # target_user_dm 가져오는 로직 필요
-                        # if target_user_dm and config.SEND_EMOTION_CHANGE_MONOLOGUE:
-                        #     monologue = await self.ai_service.generate_internal_monologue_for_emotion_change(new_random_emotion, current_emotion)
-                        #     if monologue:
-                        #         await target_user_dm.send(f"*{monologue}*") # 이탤릭체로 표시
-                    else:
-                        logger.info("No other emotions available to randomly switch to.")
+                        # (선택적) 감정 변경에 대한 내적 독백 생성 및 DM 전송
+                        if config.SEND_EMOTION_CHANGE_MONOLOGUE: # config 값 확인
+                            # target_user_dm을 가져오는 헬퍼 함수가 필요하거나, 직접 구현
+                            target_user = await self.fetch_user(config.TARGET_USER_ID) if config.TARGET_USER_ID else None
+                            if target_user:
+                                dm_channel = target_user.dm_channel or await target_user.create_dm()
+                                if dm_channel:
+                                    # ai_service에 monologue 생성 함수가 정의되어 있다고 가정
+                                    if hasattr(self.ai_service, 'generate_internal_monologue_for_emotion_change'):
+                                        monologue = await self.ai_service.generate_internal_monologue_for_emotion_change(new_random_emotion, current_emotion)
+                                        if monologue:
+                                            try:
+                                                await dm_channel.send(f"*{monologue}*")
+                                                logger.info(f"Sent emotion change monologue to user for new emotion: {new_random_emotion}")
+                                            except discord.HTTPException as e:
+                                                logger.error(f"Failed to send emotion change monologue: {e}")
+                                    else:
+                                        logger.warning("AIService does not have 'generate_internal_monologue_for_emotion_change' method.")
+                    # else:
+                        # logger.debug("No other emotions available to randomly switch to.")
                 # else:
-                #     logger.debug(f"Time since last interaction: {time_since_last_interaction.total_seconds() / 60:.1f} minutes. No emotion change needed.")
+                #      logger.debug(f"Time since last interaction: {time_since_last_interaction.total_seconds() / 60:.1f} minutes. No emotion change needed.")
 
             except asyncio.CancelledError:
                 logger.info("Emotion decay manager task cancelled.")
