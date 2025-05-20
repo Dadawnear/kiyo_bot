@@ -243,6 +243,7 @@ class AIService:
                 "\"그런 감정은 보통... 타인에게 이해받고 싶다는 욕망보다, 스스로에 대한 확인으로 이어지곤 하지. 인간은… 결국 자신을 다시 바라보는 거울을 원하니까. 크크... \n"
                 "\"그건 원래 죽은 자를 위한 풍습이었지. 지금은 소원을 비는 축제처럼 쓰이지만… 시대에 따라 의미가 바뀌는 건 자연스러운 흐름이야.\""
             )
+        }
         # KiyoBot에서 전달받은 current_mood 값 사용 (기본값은 "기본")
         mood_instruction = mood_instructions.get(current_mood or "기본", mood_instructions["기본"])
         context_parts.append(f"현재 대화 무드 및 지시: {mood_instruction}")
