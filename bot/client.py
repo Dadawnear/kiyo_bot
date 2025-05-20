@@ -24,7 +24,8 @@ INITIAL_EXTENSIONS = [
     'bot.cogs.notion_features',
     'bot.cogs.midjourney',
     'bot.cogs.reminders',
-    'bot.cogs.schedule_cog', # <<< 새로운 ScheduleCog 추가
+    'bot.cogs.schedule_cog', 
+    'bot.cogs.mood_cog'
 ]
 
 AVAILABLE_MOODS = Literal["기본", "장난", "진지"]
