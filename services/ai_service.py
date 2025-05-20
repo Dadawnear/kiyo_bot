@@ -249,6 +249,7 @@ class AIService:
 
     async def _build_kiyo_context(self, user_text: str = "", conversation_log: Optional[list] = None,
                                 current_mood: Optional[str] = "기본",
+                                kiyo_current_emotion: Optional[str] = "고요함",
                                 recent_memories: Optional[List[str]] = None,
                                 recent_observations: Optional[str] = None,
                                 recent_diary_summary: Optional[str] = None) -> str:
