@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 import logging
 import os
 import traceback # 상세한 오류 로깅을 위해 추가
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Literal
 
 import config # 설정 임포트
 
@@ -26,6 +26,8 @@ INITIAL_EXTENSIONS = [
     'bot.cogs.reminders',
     'bot.cogs.schedule_cog', # <<< 새로운 ScheduleCog 추가
 ]
+
+AVAILABLE_MOODS = Literal["기본", "장난", "진지"]
 
 class KiyoBot(commands.Bot):
     """신구지 코레키요 봇 클라이언트 클래스"""
@@ -60,6 +62,7 @@ class KiyoBot(commands.Bot):
         # self.last_diary_page_ids: Dict[int, str] = {} # <<< 기존 채널별 ID 관리에서 변경
         self.current_diary_page_id_for_mj: Optional[str] = None # MJ 이미지가 연결될 단일 ID
         self.log_max_length = 50
+        self.current_conversation_mood: AVAILABLE_MOODS = "기본"
         logger.info("Initialized state management attributes.")
 
         # --- Task Management ---
@@ -94,7 +97,20 @@ class KiyoBot(commands.Bot):
         """Midjourney 이미지가 연결될 현재 작업 중인 일기 페이지 ID 조회"""
         return self.current_diary_page_id_for_mj
 
-    # get_last_diary_page_id, get_overall_latest_diary_page_id 메소드는 삭제 (위 메소드로 대체)
+    def set_conversation_mood(self, mood: AVAILABLE_MOODS):
+        """봇의 현재 대화 무드를 설정합니다."""
+        # 사용 가능한 무드인지 확인 (선택적이지만 권장)
+        # typing.get_args(AVAILABLE_MOODS) 를 사용하여 Literal의 값들을 가져올 수 있음
+        # if mood not in get_args(AVAILABLE_MOODS):
+        #     logger.warning(f"Attempted to set invalid mood: {mood}")
+        #     return False # 또는 예외 발생
+        self.current_conversation_mood = mood
+        logger.info(f"Conversation mood set to: {mood}")
+        # return True
+
+    def get_conversation_mood(self) -> AVAILABLE_MOODS:
+        """봇의 현재 대화 무드를 반환합니다."""
+        return self.current_conversation_mood
 
 
     # --- Bot Lifecycle Methods ---
