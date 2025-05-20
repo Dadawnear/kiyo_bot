@@ -160,7 +160,7 @@ class GeneralCog(commands.Cog):
             kiyo_response = await self.bot.ai_service.generate_response(
                 conversation_log=conversation_log_for_response,
                 current_mood=final_mood_for_response,
-                kiyo_current_emotion=final_kiयो_emotion_for_response,
+                kiyo_current_emotion=final_kiyo_emotion_for_response,
                 recent_memories=recent_memories if isinstance(recent_memories, list) else None,
                 recent_observations=recent_observations if isinstance(recent_observations, str) else None,
                 recent_diary_summary=recent_diary_summary if isinstance(recent_diary_summary, str) else None
