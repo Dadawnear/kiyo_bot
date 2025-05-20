@@ -2,8 +2,8 @@ import discord
 from discord.ext import commands
 import logging
 import re
-from typing import TYPE_CHECKING # 타입 힌트 순환 참조 방지
-
+from typing import TYPE_CHECKING, Optional, List, Tuple, Dict 
+from datetime import datetime, time, timedelta
 import config # 설정 임포트
 from utils.activity_tracker import update_last_active # 유틸리티 임포트
 from utils.helpers import is_target_user # 헬퍼 함수 임포트
@@ -90,7 +90,7 @@ class GeneralCog(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """
-        메시지 수신 시 처리: 필터링, 활동 기록, 대화 로그 추가, AI 응답 생성/전송.
+        메시지 수신 시 처리: 필터링, 활동 기록, 키요 감정 결정, 대화 로그 추가, AI 응답 생성/전송.
         명령어, 다른 Cog에서 처리한 메시지는 응답 생성 안 함.
         """
         # 1. 기본 필터링: 봇 자신, 다른 봇 메시지 무시
@@ -117,11 +117,46 @@ class GeneralCog(commands.Cog):
         user_name = message.author.name # 또는 str(message.author)
 
         # 4. 활동 시간 갱신
+        self.bot.update_last_interaction_time()
         update_last_active()
-        # logger.debug(f"Activity time updated by {user_name}")
+        logger.debug(f"Activity time updated by {user_name}")
         
         # 무드 명령어 가져오기
         current_mood = self.bot.get_conversation_mood()
+
+        # 사용자 메시지 기반으로 키요의 감정 결정
+        user_emotion_for_kiyo_reaction = await self.bot.ai_service.detect_emotion(message.content)
+        current_kiyo_emotion = self.bot.get_kiyo_emotion() # 현재 키요 감정
+        current_set_mood = self.bot.get_conversation_mood() # 현재 설정된 대화 무드
+
+        new_kiyo_emotion = current_kiyo_emotion # 기본적으로 현재 감정 유지
+
+        # (여기에 사용자 감정, 현재 무드, 현재 키요 감정 등을 조합하여
+        #  키요의 다음 감정을 결정하는 더 정교한 로직을 추가할 수 있습니다.
+        #  지금은 간단한 예시만 넣겠습니다.)
+        if user_emotion_for_kiyo_reaction == "애정":
+            if current_set_mood != "장난": # 장난 무드가 아닐 때 사용자가 애정을 표현하면
+                new_kiyo_emotion = "흥미"  # 키요는 '흥미'를 느낀다
+            else: # 장난 무드일 때 사용자가 애정을 표현하면
+                new_kiyo_emotion = "냉소"  # 키요는 '냉소'적으로 반응할 수 있다 (예시)
+        elif user_emotion_for_kiyo_reaction == "불만_분노":
+            if current_set_mood == "장난":
+                new_kiyo_emotion = "흥미" # 장난 무드에서는 오히려 흥미를 느낄 수 있음
+            elif current_set_mood == "진지":
+                new_kiyo_emotion = "고요함" # 진지한 상황에서는 감정을 더 누르고 관찰
+            else: # 기본 무드
+                new_kiyo_emotion = "불쾌함"
+        elif user_emotion_for_kiyo_reaction == "슬픔" and current_set_mood != "장난":
+            new_kiyo_emotion = "미묘한 슬픔" # 사용자의 슬픔에 미묘하게 동조 (장난 아닐때)
+        elif "민속학" in message.content or "인간" in message.content or "아름다움" in message.content : # 특정 키워드에 반응
+            if current_set_mood == "진지":
+                new_kiyo_emotion = "탐구심"
+            else:
+                new_kiyo_emotion = "흥미"
+
+        self.bot.set_kiyo_emotion(new_kiyo_emotion) # 키요 감정 업데이트
+        logger.info(f"[GeneralCog] Kiyo's emotion updated to '{new_kiyo_emotion}' based on user message and mood '{current_set_mood}'.")
+        # --- 키요 감정 결정 로직 끝 ---
 
         # 5. 사용자 메시지 대화 로그에 추가
         # add_conversation_log 메소드는 KiyoBot 클래스에 구현됨
@@ -139,12 +174,16 @@ class GeneralCog(commands.Cog):
             recent_memories = await self.bot.notion_service.fetch_recent_memories(limit=3)
             recent_observations = await self.bot.notion_service.fetch_recent_observations(limit=1)
             recent_diary_summary = await self.bot.notion_service.fetch_recent_diary_summary(limit=1)
+            # 현재 설정된 대화 무드와 키요의 감정 상태를 가져와 AI 서비스에 전달
+            final_mood_for_response = self.bot.get_conversation_mood()
+            final_kiyo_emotion_for_response = self.bot.get_kiyo_emotion()
 
             # AI 서비스 호출하여 응답 생성
             logger.debug(f"Requesting AI response for channel {channel_id}...")
             kiyo_response = await self.bot.ai_service.generate_response(
                 conversation_log=conversation_log,
-                current_mood=current_mood,
+                current_mood=final_mood_for_response,                 # 설정된 대화 무드 전달
+                kiyo_current_emotion=final_kiyo_emotion_for_response, # 키요의 현재 감정 전달
                 recent_memories=recent_memories if isinstance(recent_memories, list) else None,
                 recent_observations=recent_observations if isinstance(recent_observations, str) else None,
                 recent_diary_summary=recent_diary_summary if isinstance(recent_diary_summary, str) else None
