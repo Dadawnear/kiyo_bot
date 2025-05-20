@@ -117,6 +117,17 @@ if FACE_TO_FACE_CHANNEL_ID_STR:
     except ValueError:
         logging.error(f"환경변수 'FACE_TO_FACE_CHANNEL_ID'({FACE_TO_FACE_CHANNEL_ID_STR})가 올바른 숫자 형식이 아닙니다.")
 
+# --- <<< 새로운 키요 감정 변화 관련 설정 추가 >>> ---
+# 감정 변화 체크 주기 (단위: 초). 기본값: 30분 (1800초)
+KIYO_EMOTION_DECAY_CHECK_INTERVAL_SECONDS = int(os.getenv("KIYO_EMOTION_DECAY_CHECK_INTERVAL_SECONDS", 60 * 30))
+
+# 감정 변화가 발동되는 최소 비활성 시간 (단위: 초). 기본값: 3시간 (10800초)
+KIYO_EMOTION_CHANGE_INACTIVITY_THRESHOLD_SECONDS = int(os.getenv("KIYO_EMOTION_CHANGE_INACTIVITY_THRESHOLD_SECONDS", 3 * 60 * 60))
+
+# (선택적) 감정 자동 변경 시 사용자에게 내적 독백 형태의 DM을 보낼지 여부 (True/False)
+# .env 파일에서 "true" 또는 "false" 문자열로 설정 가능
+SEND_EMOTION_CHANGE_MONOLOGUE_STR = os.getenv("SEND_EMOTION_CHANGE_MONOLOGUE", "false").lower()
+SEND_EMOTION_CHANGE_MONOLOGUE = SEND_EMOTION_CHANGE_MONOLOGUE_STR == "true"
 
 # --- 웹 서버 설정 ---
 WEB_SERVER_PORT = int(os.getenv("PORT", 10000))
