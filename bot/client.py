@@ -4,6 +4,7 @@ import logging
 import os
 import traceback # 상세한 오류 로깅을 위해 추가
 from typing import Dict, List, Tuple, Optional, Literal
+import random
 
 import config # 설정 임포트
 
@@ -29,6 +30,15 @@ INITIAL_EXTENSIONS = [
 ]
 
 AVAILABLE_MOODS = Literal["기본", "장난", "진지"]
+
+AVAILABLE_KIYO_EMOTIONS = Literal[
+    "고요함",    # 평온하고 관찰자적인 기본 상태
+    "흥미",      # 무언가에 호기심을 느끼거나 지적 자극을 받은 상태
+    "냉소",      # 상황이나 대상에 대해 약간의 비판이나 회의감을 느끼는 상태
+    "불쾌함",    # 무례함이나 부조리함에 내적으로 불쾌감을 느끼지만 겉으로는 잘 드러내지 않음
+    "탐구심",    # 특정 주제나 현상에 대해 깊이 파고들고 싶어 하는 학자적 욕구
+    "미묘한 슬픔" # 말로 표현하기 어려운, 잔잔하게 깔린 슬픔이나 공허함 (드물게 나타남)
+]
 
 class KiyoBot(commands.Bot):
     """신구지 코레키요 봇 클라이언트 클래스"""
@@ -64,6 +74,9 @@ class KiyoBot(commands.Bot):
         self.current_diary_page_id_for_mj: Optional[str] = None # MJ 이미지가 연결될 단일 ID
         self.log_max_length = 50
         self.current_conversation_mood: AVAILABLE_MOODS = "기본"
+        self.current_kiyo_emotion: AVAILABLE_KIYO_EMOTIONS = "고요함" # 기본 감정 상태
+        self.last_interaction_time: datetime = datetime.now(config.KST) # 마지막 상호작용 시간 (감정 변화 타이머용)
+        self.emotion_decay_task: Optional[asyncio.Task] = None # 감정 변화 관리 태스크
         logger.info("Initialized state management attributes.")
 
         # --- Task Management ---
@@ -71,6 +84,24 @@ class KiyoBot(commands.Bot):
         self.initiate_checker_loop_task: Optional[tasks.Loop] = None
 
     # --- State Management Methods ---
+    def set_kiyo_emotion(self, emotion: AVAILABLE_KIYO_EMOTIONS):
+        """키요의 현재 감정 상태를 설정합니다."""
+        if emotion != self.current_kiyo_emotion: # 감정이 실제로 변경될 때만 로그 기록
+            self.current_kiyo_emotion = emotion
+            logger.info(f"Kiyo's internal emotion set to: {emotion}")
+        else:
+            logger.debug(f"Kiyo's emotion is already {emotion}.")
+            pass
+
+    def get_kiyo_emotion(self) -> AVAILABLE_KIYO_EMOTIONS:
+        """키요의 현재 감정 상태를 반환합니다."""
+        return self.current_kiyo_emotion
+
+    def update_last_interaction_time(self):
+        """마지막 사용자 상호작용 시간을 현재 시간으로 갱신합니다."""
+        self.last_interaction_time = datetime.now(config.KST)
+        logger.debug(f"Last interaction time updated to: {self.last_interaction_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        
     def get_conversation_log(self, channel_id: int) -> List[Tuple[str, str, int]]:
         return self.conversation_logs.setdefault(channel_id, [])
 
@@ -113,6 +144,52 @@ class KiyoBot(commands.Bot):
         """봇의 현재 대화 무드를 반환합니다."""
         return self.current_conversation_mood
 
+    # --- Emotion Decay Manager (백그라운드 태스크) ---
+    async def emotion_decay_manager(self):
+        """일정 시간 대화가 없으면 키요의 감정을 랜덤하게 변경하는 관리자 태스크."""
+        await self.wait_until_ready() # 봇이 준비될 때까지 대기
+        logger.info("Kiyo's emotion decay manager started.")
+        while not self.is_closed():
+            try:
+                await asyncio.sleep(60 * 30) # 30분마다 체크 (너무 잦으면 성능에 영향 줄 수 있으므로 조절)
+
+                now = datetime.now(config.KST)
+                time_since_last_interaction = now - self.last_interaction_time
+                
+                # 3시간 이상 상호작용이 없었는지 확인
+                if time_since_last_interaction.total_seconds() >= (3 * 60 * 60):
+                    current_emotion = self.get_kiyo_emotion()
+                    available_emotions_list = list(get_args(AVAILABLE_KIYO_EMOTIONS)) # Literal에서 실제 값 리스트 가져오기
+                    
+                    # 현재 감정을 제외한 다른 감정들 중에서 랜덤 선택
+                    new_emotion_pool = [e for e in available_emotions_list if e != current_emotion]
+                    
+                    if new_emotion_pool:
+                        new_random_emotion = random.choice(new_emotion_pool)
+                        self.set_kiyo_emotion(new_random_emotion) # 새로운 감정으로 설정
+                        logger.info(f"Kiyo's emotion auto-changed to '{new_random_emotion}' due to 3+ hours of inactivity.")
+                        
+                        # 감정 변경 후에는 타이머 리셋을 위해 상호작용 시간 갱신
+                        self.update_last_interaction_time() 
+                        
+                        # (선택적) 감정 변경에 대한 내적 독백 생성 및 로그/DM 전송
+                        # target_user_dm = await self._get_target_user_dm() # target_user_dm 가져오는 로직 필요
+                        # if target_user_dm and config.SEND_EMOTION_CHANGE_MONOLOGUE:
+                        #     monologue = await self.ai_service.generate_internal_monologue_for_emotion_change(new_random_emotion, current_emotion)
+                        #     if monologue:
+                        #         await target_user_dm.send(f"*{monologue}*") # 이탤릭체로 표시
+                    else:
+                        logger.info("No other emotions available to randomly switch to.")
+                # else:
+                #     logger.debug(f"Time since last interaction: {time_since_last_interaction.total_seconds() / 60:.1f} minutes. No emotion change needed.")
+
+            except asyncio.CancelledError:
+                logger.info("Emotion decay manager task cancelled.")
+                break
+            except Exception as e:
+                logger.error(f"Error in emotion_decay_manager: {e}", exc_info=True)
+                await asyncio.sleep(60 * 5) # 오류 발생 시 5분 후 재시도
+
 
     # --- Bot Lifecycle Methods ---
     async def setup_hook(self):
@@ -138,10 +215,15 @@ class KiyoBot(commands.Bot):
         else:
              logger.info("Scheduler already initialized.")
 
+        # <<< 감정 변화 관리 태스크 시작 >>>
+        if not (self.emotion_decay_task and not self.emotion_decay_task.done()):
+            self.emotion_decay_task = self.loop.create_task(self.emotion_decay_manager())
+
         try:
             loop_task = start_initiate_checker(self)
             if loop_task:
                  self.initiate_checker_loop_task = loop_task
+                
         except Exception as e:
             logger.exception("Failed to start initiate checker task:")
 
@@ -162,6 +244,13 @@ class KiyoBot(commands.Bot):
         if self.initiate_checker_loop_task and self.initiate_checker_loop_task.is_running():
             stop_initiate_checker()
         shutdown_scheduler()
+
+         # <<< 감정 변화 관리 태스크 캔슬 >>>
+        if self.emotion_decay_task and not self.emotion_decay_task.done():
+            self.emotion_decay_task.cancel()
+            try: await self.emotion_decay_task # 캔슬 완료 대기
+            except asyncio.CancelledError: logger.info("Emotion decay manager task successfully cancelled.")
+            except Exception as e: logger.error(f"Error during emotion_decay_task cancellation: {e}", exc_info=True)
 
         logger.info("Closing service sessions...")
         if hasattr(self.notion_service, 'close_session'):
