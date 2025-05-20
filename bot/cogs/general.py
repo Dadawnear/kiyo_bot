@@ -141,6 +141,7 @@ class GeneralCog(commands.Cog):
             logger.debug(f"Requesting AI response for channel {channel_id}...")
             kiyo_response = await self.bot.ai_service.generate_response(
                 conversation_log=conversation_log,
+                current_mood=current_mood,
                 recent_memories=recent_memories if isinstance(recent_memories, list) else None,
                 recent_observations=recent_observations if isinstance(recent_observations, str) else None,
                 recent_diary_summary=recent_diary_summary if isinstance(recent_diary_summary, str) else None
