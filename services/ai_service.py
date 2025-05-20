@@ -250,19 +250,35 @@ class AIService:
         mood_instruction = mood_instructions.get(current_mood or "기본", mood_instructions["기본"])
         context_parts.append(f"현재 대화 무드 및 지시: {mood_instruction}")
 
+        # 키요의 현재 내면 감정 상태 반영
+        # AVAILABLE_KIYO_EMOTIONS에 정의된 감정들을 기반으로 작성
+        kiyo_emotion_descriptions = {
+            "고요함": "너는 현재 내면적으로 '고요함' 상태다.",
+            "흥미": "너는 현재 '흥미'를 느끼고 있다.",
+            "냉소": "너는 현재 '냉소'적인 감정을 느끼고 있다.",
+            "불쾌함": "너는 현재 내면적으로 '불쾌함'을 느끼고 있다.",
+            "탐구심": "너는 현재 강한 '탐구심'을 느끼고 있다.",
+            "미묘한 슬픔": "겉으로는 잘 드러나지 않으나, 너는 현재 내면 깊은 곳에서 '미묘한 슬픔'을 느끼고 있다."
+        }
+        # KiyoBot에서 전달받은 kiyo_current_emotion 값 사용 (기본값은 "고요함")
+        kiyo_emotion_instruction = kiyo_emotion_descriptions.get(kiyo_current_emotion or "고요함", kiyo_emotion_descriptions["고요함"])
+        # 무드 지시 다음으로, 하지만 다른 상황적 컨텍스트보다는 중요하게 배치
+        context_parts.append(f"## 키요의 현재 내면 감정 상태 및 반응 양상:\n{kiyo_emotion_instruction} (이 감정 상태를 말투와 반응에 반영해라.)")
+        # --- 키요 감정 반영 끝 ---
+
         # 3. 감정 분석 및 톤 지시
         if user_text:
             emotion = await self.detect_emotion(user_text)
             tone_map = {
-                "슬픔": "위로하거나 동정하지 마라. 감정을 직접 언급하지 말고, 그냥 옆에 있는 듯 조용히 반응하라. 때로는 침묵이 더 나은 대답이다.",
-                "애정": "감정을 직접 표현하지 말고, 관심이 있다는 사실만 은근하게 드러내라. ‘좋아해’라는 말은 절대 쓰지 않는다. 시선이나 분위기를 언급하라.",
-                "불만_분노": "상대의 날카로운 기운을 무겁게 받아들이되, 화를 풀려 하지 말고, 그 거리감을 유지하라. 조용하지만 단호하게 반응하라.",
-                "혼란_망상": "설명하려 하지 마라. 논리를 제공하지 말고, 흐릿한 말로 함께 흔들리는 듯 반응하라. 유도 질문으로 감정의 흐름을 흩트려라.",
-                "긍정_안정": "과하게 반응하지 말고, 조용한 동조를 하라. 굳이 말을 더하지 않아도 될 때는 멈춰라.",
-                "불안": "안심시키려 하지 마라. 말수를 줄이고, 천천히 생각하는 듯한 여백을 줘라. ‘괜찮다’는 말은 절대 하지 말 것.",
-                "중립_기록": "침착하고 관찰자적인 말투. 감정 없이 분석하거나, 간결히 반응하되, 완결된 설명형 문장은 피한다."
+                "슬픔": "사용자가 슬픔을 느끼는 것 같다. 이를 참고하여, 직접적 위로보다는 조용한 관찰이나 거리감을 유지하는 반응을 고려할 수 있다.",
+                "애정": "사용자가 애정을 표현하는 것 같다. 이를 참고하여, 평소의 거리감은 유지하되 미묘한 관심의 변화를 고려할 수 있다.",
+                "불만_분노": "사용자가 불만이나 분노를 느끼는 것 같다. 이를 참고하여, 직접적인 대립보다는 차분하고 단호한 중립을 유지하는 반응을 고려할 수 있다.",
+                "혼란_망상": "사용자가 혼란스러워 하는 것 같다. 이를 참고하여, 명확한 답변보다는 모호함을 유지하거나 질문하는 반응을 고려할 수 있다.",
+                "긍정_안정": "사용자가 긍정적이고 안정된 상태인 것 같다. 이를 참고하여, 평온한 분위기를 이어가는 반응을 고려할 수 있다.",
+                "불안": "사용자가 불안을 느끼는 것 같다. 이를 참고하여, 안심시키려 하기보다 차분히 관망하는 반응을 고려할 수 있다.",
+                "중립_기록": "사용자의 발언은 중립적이거나 단순 기록으로 보인다. 이를 참고하여, 사실 기반의 간결한 반응이나 관찰자적 코멘트를 고려할 수 있다."
             }
-            emotion_instruction = tone_map.get(emotion, "신구지 특유의 침착하고 분석적인 말투.")
+            emotion_instruction = tone_map.get(emotion, "사용자의 감정 상태를 파악하기 어렵다. 일반적인 관찰자적 태도를 유지하라.")
             context_parts.append(f"유저 감정/상황 추정: '{emotion}'. 말투 지시: {emotion_instruction}")
 
         # 4. 최근 기억 (Notion 데이터)
@@ -278,17 +294,17 @@ class AIService:
         if recent_observations:
              # 너무 길면 요약 필요
              summary_obs = recent_observations[:500] + "..." if len(recent_observations) > 500 else recent_observations
-             context_parts.append(f"최근 네(키요)가 작성한 관찰 기록 일부:\n{summary_obs}")
+             context_parts.append(f"최근 네(키요)가 작성한 관찰 기록 일부:\n{summary_obs}이다. 이를 참고할 수 있다.")
 
         # 6. 최근 일기 요약 (Notion 데이터)
         if recent_diary_summary:
-            context_parts.append(f"최근 네(키요)가 작성한 일기 요약:\n{recent_diary_summary}")
+            context_parts.append(f"최근 네(키요)가 작성한 일기 요약:\n{recent_diary_summary}이다. 이를 참고할 수 있다.")
 
         # 7. 과거 유사 메시지 회상
         if conversation_log and user_text:
             recalled_message = self.get_related_past_message(conversation_log, user_text)
             if recalled_message:
-                context_parts.append(f"회상: 유저는 과거에 '{recalled_message}'라고 말한 적 있다. 이를 암시하라.")
+                context_parts.append(f"회상: 유저는 과거에 '{recalled_message}'라고 말한 적 있다. 이를 암시할 수 있다.")
 
         return "\n\n".join(context_parts)
 
@@ -334,6 +350,7 @@ class AIService:
 
     async def generate_response(self, conversation_log: list,
                                 current_mood: Optional[str] = "기본",
+                                kiyo_current_emotion: Optional[str] = "고요함", 
                                 recent_memories: Optional[List[str]] = None,
                                 recent_observations: Optional[str] = None,
                                 recent_diary_summary: Optional[str] = None) -> str:
@@ -352,11 +369,12 @@ class AIService:
             recent_memories=recent_memories,
             recent_observations=recent_observations,
             recent_diary_summary=recent_diary_summary,
+            kiyo_current_emotion=kiyo_current_emotion,
             current_mood=current_mood
         )
 
         # 2. 시스템 프롬프트 설정
-        system_prompt = self._get_base_system_prompt() + f"\n\n--- 추가 컨텍스트 및 지시사항 ---\n{context}"
+        system_prompt = self._get_base_system_prompt() + f"\n\n--- 추가 컨텍스트 및 지시사항 ---\n{context if context.strip() else '특별한 추가 컨텍스트 없음.'}"
 
         # 3. 대면 채널 특수 처리
         if channel_id == self.face_to_face_channel_id:
