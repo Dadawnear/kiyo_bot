@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 import logging
 import os
 import traceback 
-from typing import Dict, List, Tuple, Optional, Literal
+from typing import Dict, List, Tuple, Optional, Literal, get_args
 import asyncio
 import random
 import config 
